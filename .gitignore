@@ -1,0 +1,27 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Datos sensibles
+credentials.json
+token.json
+*.token
+*.key
+.env
+config/credentials/
+
+# Datos locales
+data/job_applications.json
+data/interview_logs/
+logs/
+*.log
+
+# Node
+node_modules/
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini

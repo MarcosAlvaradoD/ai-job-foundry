@@ -1,0 +1,80 @@
+Marcos Alberto Alvarado de la Torre
+Guadalajara, Jalisco, Mexico
+Email: markalvati@gmail.com
+Phone: +52 33 2332 0358
+LinkedIn: www.linkedin.com/in/marcos-alberto-alvarado-de-la-torre-b483b1b1
+
+------------------------------------------------------------
+Professional Summary
+------------------------------------------------------------
+IT and Business Analysis professional with over 10 years of experience leading ERP migrations, data integration,
+and IT infrastructure projects across Latin America. Skilled in Agile methodologies, Lean Six Sigma, and
+stakeholder management. Proven ability to translate complex business requirements into actionable technical
+solutions that enhance scalability, efficiency, and cost savings. Experienced in managing multicultural teams,
+aligning technical execution with business strategy, and ensuring compliance with local regulations.
+Seeking to leverage this expertise as a Product Owner / Project Manager in enterprise-level digital transformation initiatives.
+
+------------------------------------------------------------
+Core Skills
+------------------------------------------------------------
+Project Management: Agile (Scrum, Kanban), Lean Six Sigma (Yellow, Green, Black Belt), ITIL, UAT, process optimization
+Data / ETL: SSIS, Python (automation, data cleaning), SQL, Qlik Replicate (Attunity)
+ERP Systems: SAP (Super User across modules), Dynamics AX, Intelisis (legacy ERP)
+Cloud & Infrastructure: Azure, AWS, Ubiquiti, Meraki, Active Directory, VMware
+Tools: Jira, Confluence, Microsoft 365, TortoiseSVN, WebMethods Integration Server
+Soft Skills: Cross-functional leadership, stakeholder negotiation, communication, analytical thinking
+
+------------------------------------------------------------
+Certifications & Education
+------------------------------------------------------------
+- Diploma in Project Management – Universidad Autónoma de Guadalajara (Focus: PMI, Scrum, Lean Six Sigma)
+- Lean Six Sigma (Yellow, Green, Black Belt) – Completed
+- Scrum Master and PMP – In process (covered in diploma coursework)
+- Bachelor’s in Information Systems – Universidad de Guadalajara
+
+------------------------------------------------------------
+Professional Experience
+------------------------------------------------------------
+Assistant Consultant
+Tata Consultancy Services (TCS) – Guadalajara
+June 2022 – July 2024
+- Led ETL processes migrating data from legacy PDF/ERP systems to new platforms, ensuring compliance with Toyota’s Poka-Yoke standards.
+- Automated cleansing of 800TB of legacy files using Python, reducing duplicates by 45%.
+- Collaborated with Toyota Financial Services and City Banamex projects, enhancing UI/UX and data governance processes (role: Business Analyst).
+- Translated business and technical requirements into ETL specifications and coordinated with cross-functional teams across multiple geographies.
+
+LATAM IT Manager
+Nefab Mexico – Guadalajara
+February 2018 – June 2022
+- Directed IT infrastructure and ERP management across multiple branches in LATAM, leading teams of 12–13 professionals.
+- Managed migration from Intelisis to Dynamics AX, ensuring compliance with regional tax regulations and system integration across time zones.
+- Conducted strategic evaluations for new distribution centers, analyzing costs, import/export taxes, and supply chain conditions for executive board decisions.
+- Transitioned communications infrastructure from fixed-line to cellular, reducing operational costs and improving coordination across departments.
+- Negotiated B2B contracts with HP Mexico, achieving hardware cost reductions of 20–45%.
+
+IT Lead
+Medisist – Guadalajara
+June 2016 – February 2018
+- Managed MS-SQL databases and secure server environments hosting sensitive US hospital medical records.
+- Led deployment of a telemedicine system for the Secretary of Health in Yucatán, integrating hardware and software teams.
+- Conducted client requirement discovery, mapped business needs to product capabilities, and documented processes under CMMI Level 5 standards.
+
+------------------------------------------------------------
+Additional Experience
+------------------------------------------------------------
+University Professor – Universidad de Guadalajara
+Weekend teaching role in IT subjects, fostering leadership and technical knowledge among undergraduate students.
+
+------------------------------------------------------------
+Languages
+------------------------------------------------------------
+- Spanish: Native
+- English: Upper Intermediate (B2)
+
+------------------------------------------------------------
+Additional Notes
+------------------------------------------------------------
+- Extensive experience managing ERP and data transformation initiatives with cross-functional and international teams.
+- Strong analytical mindset with focus on process improvement, quality assurance, and Lean Six Sigma methodologies.
+- Currently completing diploma coursework including PMP, Scrum Master, and Lean Six Sigma Black Belt certifications.
+- Recognized for building scalable, compliant, and cost-efficient IT environments aligned with corporate strategy.

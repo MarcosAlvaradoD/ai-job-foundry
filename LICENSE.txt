@@ -1,0 +1,76 @@
+DUAL LICENSE - AI Job Foundry
+Copyright (c) 2025 Marcos Alvarado
+Email: markalvati@gmail.com
+GitHub: https://github.com/MarcosAlvaradoD
+
+PERSONAL USE LICENSE (Free)
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to use the Software for PERSONAL, NON-COMMERCIAL purposes, subject to the following conditions:
+
+✅ You CAN:
+Use this software for personal job searching
+Modify the code for your own use
+Fork the repository
+Study the code
+Share the link to this repository
+❌ You CANNOT:
+Use this software to provide services to others (consulting, SaaS, etc.)
+Sell or sublicense the software
+Remove copyright notices
+Claim authorship of the original code
+COMMERCIAL USE LICENSE (Paid)
+If you want to:
+
+Use this software in a business/company
+Provide services based on this software (consulting, SaaS, recruiting agencies)
+Integrate this software into commercial products
+Generate revenue directly or indirectly from this software
+You MUST:
+
+Contact the author: markalvati@gmail.com
+Negotiate a commercial license agreement
+Provide fair compensation (royalties, one-time fee, or equity)
+💰 Commercial Licensing Terms:
+Tier 1 - Small Business (< $100K revenue/year)
+
+One-time fee: $500 USD
+Includes: Full source code access, updates for 1 year, basic support
+Tier 2 - Medium Business ($100K - $1M revenue/year)
+
+One-time fee: $2,500 USD OR 1% revenue share
+Includes: Full source code access, updates for 2 years, priority support
+Tier 3 - Enterprise (> $1M revenue/year)
+
+Custom negotiation
+Contact: markalvati@gmail.com
+ENFORCEMENT
+If you use this software commercially without a license:
+
+You are in violation of this agreement
+You may be subject to legal action
+You will be required to pay 3x the standard license fee + legal costs
+ATTRIBUTION REQUIREMENT
+In ALL uses (personal or commercial), you must:
+
+Keep this LICENSE file intact
+Credit the original author in your documentation
+Link to the original repository
+Example attribution:
+
+This project uses AI Job Foundry by Marcos Alvarado
+https://github.com/MarcosAlvaradoD/ai-job-foundry
+WARRANTY DISCLAIMER
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+
+IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+
+CONTACT
+For commercial licensing inquiries, support, or questions:
+
+Marcos Alvarado
+Email: markalvati@gmail.com
+LinkedIn: linkedin.com/in/marcosalvaradod
+GitHub: github.com/MarcosAlvaradoD
+
+Last updated: November 3, 2025
+Version: 1.0
+
