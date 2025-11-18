@@ -1,0 +1,27 @@
+# AI Job Foundry - Dependencies
+# Generated: 2025-11-03
+
+# Google APIs
+google-auth==2.23.0
+google-auth-oauthlib==1.1.0
+google-api-python-client==2.100.0
+
+# Data processing
+pandas==2.1.1
+openpyxl==3.1.2
+numpy==1.25.2
+
+# HTTP requests
+requests==2.31.0
+
+# Audio processing (Interview Copilot)
+sounddevice==0.4.6
+whisper==1.1.10
+
+# Utilities
+python-dotenv==1.0.0
+pyyaml==6.0.1
+
+# Optional (si usas FastAPI para dashboard)
+fastapi==0.103.1
+uvicorn==0.23.2

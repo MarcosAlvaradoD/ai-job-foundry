@@ -1,0 +1,16 @@
+
+============================================================
+Timestamp: 2025-11-06T02:19:50.083645
+Empresa: Lingaro
+Posición: BI & Power Platform Consultant
+
+PREGUNTA:
+como creas un join de tablas de sql en una tabla externa?
+
+RESPUESTA GENERADA:
+RESPUESTA SUGERIDA: Para crear un join de tablas en SQL en una tabla externa, primero identificamos las columnas comunes entre las tablas. Por ejemplo, si estamos trabajando con datos de pacientes y sus consultas médicas, podemos realizar un join utilizando la columna "ID del paciente" como clave para unir ambas tablas.
+
+PUNTOS CLAVE:
+- Identificar columnas comunes en las tablas.
+- Utilizar la cláusula JOIN en SQL.
+- Ejemplo con ID de pacientes.

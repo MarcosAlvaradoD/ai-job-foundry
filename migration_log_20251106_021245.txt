@@ -1,0 +1,17 @@
+AI JOB FOUNDRY - LOG DE MIGRACIÓN
+============================================================
+
+[02:12:45] OK: Estructura verificada
+[02:12:45] INFO: Creando configuración unificada...
+[02:12:45] OK: Configuración guardada: C:\Users\MSI\Desktop\ai-job-foundry\config.json
+[02:12:45] INFO: Migrando datos...
+[02:12:45] OK: Copiado: cv_descriptor.txt → data/
+[02:12:45] OK: Copiado: token.json → data/credentials/
+[02:12:45] OK: Copiado: model_memory/profile.json → data/model_memory/
+[02:12:45] OK: Copiado: state/seen_ids.json → data/state/
+[02:12:45] INFO: Creando runner unificado...
+[02:12:45] OK: Runner creado: C:\Users\MSI\Desktop\ai-job-foundry\run_unified.py
+[02:12:45] INFO: Actualizando rutas en scripts...
+[02:12:45] OK: Actualizado: core/ingestion/ingest_email_to_sheet_v2.py
+[02:12:45] OK: Actualizado: core/enrichment/enrich_sheet_with_llm_v3.py
+[02:12:45] OK: README actualizado

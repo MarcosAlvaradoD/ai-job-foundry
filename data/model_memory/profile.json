@@ -1,0 +1,20 @@
+{
+  "skill_weights": {},
+  "salary": {
+    "min": 30000.0,
+    "max": 210000.0,
+    "avg": 134000.0
+  },
+  "history": [
+    {
+      "timestamp": "2025-10-17T23:36:48",
+      "offers_seen": 39,
+      "avg_fit": 0.0,
+      "salary": {
+        "min": 30000.0,
+        "max": 210000.0,
+        "avg": 134000.0
+      }
+    }
+  ]
+}

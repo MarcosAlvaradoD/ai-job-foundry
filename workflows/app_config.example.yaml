@@ -1,0 +1,63 @@
+app:
+  mode: safe
+  ui: pyside6
+  os: windows11
+  preferred_language: es-MX
+  default_browser: chromium
+  session:
+    encrypted: true
+    reauth_days: 30
+    twofa_pause: true
+providers:
+  ai:
+    provider: auto
+    supported:
+    - openai
+    - azure_openai
+    - lmstudio
+    - ollama
+    model: ask-at-runtime
+    api_key_env: ASK_AT_RUNTIME
+  google:
+    sheets:
+      enabled: true
+      sheet_title: Job Pipeline
+      worksheets:
+        jobs: Jobs
+        inbox: Inbox
+      credentials_type: oauth
+      credentials_path: ./google_credentials.json
+      user_email: ask-at-runtime@example.com
+      sheet_url: https://docs.google.com/spreadsheets/d/<YOUR_SHEET_ID>/edit
+      sheet_id: <YOUR_SHEET_ID>
+    gmail:
+      enabled: true
+      label_for_jobs: JobTracker/Jobs
+      filter_query_template: subject:("application" OR "applied" OR "candidate" OR
+        "recruiter" OR "assessment" OR "interview")
+      watch_poll_seconds: 600
+search:
+  keywords:
+  - Project Manager
+  - Business Analyst
+  locations:
+  - Guadalajara, Jalisco, MX
+  - Remote
+  work_modes:
+  - remote
+  - hybrid
+  - onsite
+  salary_floor_mxn_monthly: 60000
+  sources:
+  - linkedin
+  - indeed
+  - glassdoor
+  cv_autofill:
+    enabled: true
+    allow_user_edit: true
+documents:
+  cv_master_path: ''
+  cv_variants:
+    PM: ''
+    BA: ''
+    PO: ''

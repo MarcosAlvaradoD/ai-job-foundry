@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Job Tracker Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100 p-8">
+    <div class="max-w-6xl mx-auto">
+        <h1 class="text-3xl font-bold mb-8">Job Applications Dashboard</h1>
+        
+        <div class="grid grid-cols-3 gap-4 mb-8">
+            <div class="bg-white p-6 rounded shadow">
+                <div class="text-gray-500 text-sm">Total Applications</div>
+                <div class="text-3xl font-bold" id="total">0</div>
+            </div>
+            <div class="bg-white p-6 rounded shadow">
+                <div class="text-gray-500 text-sm">Pending Interviews</div>
+                <div class="text-3xl font-bold text-orange-600" id="interviews">0</div>
+            </div>
+            <div class="bg-white p-6 rounded shadow">
+                <div class="text-gray-500 text-sm">Recent Responses</div>
+                <div class="text-3xl font-bold text-green-600" id="responses">0</div>
+            </div>
+        </div>
+        
+        <div class="bg-white p-6 rounded shadow">
+            <h2 class="text-xl font-bold mb-4">Applications</h2>
+            <table class="w-full" id="applications-table">
+                <thead>
+                    <tr class="border-b">
+                        <th class="text-left py-2">Company</th>
+                        <th class="text-left py-2">Position</th>
+                        <th class="text-left py-2">Status</th>
+                        <th class="text-left py-2">Applied</th>
+                    </tr>
+                </thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+    </div>
+    
+    <script>
+        // Cargar datos del JSON
+        async function loadData() {
+            const response = await fetch('data/applications/job_applications.json');
+            const data = await response.json();
+            
+            // Actualizar métricas
+            document.getElementById('total').textContent = Object.keys(data).length;
+            
+            let interviews = 0;
+            let responses = 0;
+            
+            // Llenar tabla
+            const tbody = document.getElementById('table-body');
+            tbody.innerHTML = '';
+            
+            Object.entries(data).forEach(([id, app]) => {
+                interviews += app.interviews?.length || 0;
+                responses += app.communications?.length || 0;
+                
+                const row = document.createElement('tr');
+                row.className = 'border-b hover:bg-gray-50';
+                row.innerHTML = `
+                    <td class="py-2">${app.company}</td>
+                    <td class="py-2">${app.position}</td>
+                    <td class="py-2">
+                        <span class="px-2 py-1 rounded text-sm ${
+                            app.status === 'applied' ? 'bg-blue-100 text-blue-800' :
+                            app.status === 'interview' ? 'bg-orange-100 text-orange-800' :
+                            'bg-gray-100 text-gray-800'
+                        }">
+                            ${app.status}
+                        </span>
+                    </td>
+                    <td class="py-2">${app.date_applied}</td>
+                `;
+                tbody.appendChild(row);
+            });
+            
+            document.getElementById('interviews').textContent = interviews;
+            document.getElementById('responses').textContent = responses;
+        }
+        
+        loadData();
+        setInterval(loadData, 30000); // Actualizar cada 30 segundos
+    </script>
+</body>
+</html>

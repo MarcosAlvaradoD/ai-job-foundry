@@ -1,0 +1,75 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Datos sensibles
+credentials.json
+token.json
+*.token
+*.key
+.env
+config/credentials/
+
+# Datos locales
+data/job_applications.json
+data/interview_logs/
+logs/
+*.log
+
+# Node
+node_modules/
+
+# Sistema
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Credenciales y datos sensibles
+data/credentials/*.json
+data/credentials/*.txt
+data/credentials/token*.json
+
+# Datos locales
+data/raw_jobs/
+data/applications/
+data/interviews/
+
+# Logs
+logs/*.log
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+env/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Archivos temporales
+*.tmp
+*.bak
+*.backup
+*_ARCHIVE/
+
+# Browser data (Playwright)
+data/browser_data/
+data/browser_data_indeed/
+
+# MCP servers (submodules)
+mcp-servers/

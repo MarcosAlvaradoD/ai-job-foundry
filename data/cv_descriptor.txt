@@ -1,0 +1,75 @@
+CANDIDATE:
+  name: Marcos Alberto Alvarado de la Torre
+  email: markalvati@gmail.com
+  phone: +52 33 2332 0358
+  location: Guadalajara, Jalisco, Mexico
+  languages:
+    - Spanish: Native
+    - English: Upper-Intermediate (B2)
+
+EXPERIENCE_SUMMARY:
+  years_total: 10+
+  domains: [IT & Business Analysis, ERP migrations, Data Integration, Infrastructure]
+  strengths:
+    - Translating business requirements to technical specs
+    - Leading cross-functional teams (12–13+)
+    - Agile (Scrum, Kanban), Lean Six Sigma, ITIL, UAT
+    - Data/ETL (Python, SQL, SSIS), data cleansing/quality
+    - Cloud/Net: Azure, AWS, Meraki, Ubiquiti, AD, VMware
+  ats_keywords:
+    - ERP: SAP (Super User), Dynamics AX, Intelisis
+    - Tools: Jira, Confluence, MS 365
+    - ETL: Python (automation, cleaning), SQL, SSIS
+    - Methodologies: Agile, Lean Six Sigma, ITIL, UAT
+    - Security/Compliance: Health/medical records (US)
+
+ROLES_INTEREST:
+  titles_preferred: [Product Owner, Project Manager, Technical Program Manager, Business Analyst Lead]
+  remote_policy: Remote or Hybrid acceptable
+  region_restrictions: Prefer LATAM/Remote-friendly; willing to consider US-remote if eligible
+
+RECENT_ROLES:
+  - title: Assistant Consultant
+    company: TCS (Tata Consultancy Services)
+    location: Guadalajara, Mexico
+    dates: 2022-06 to 2024-07
+    highlights:
+      - Led ETL migrations from legacy ERP/PDF to new platforms
+      - Automated data cleansing of 800TB with Python (−45% duplicates)
+      - Translated business & technical requirements for ETL
+  - title: LATAM IT Manager
+    company: Nefab Mexico
+    dates: 2018-02 to 2022-06
+    highlights:
+      - Directed infra & ERP across branches (teams 12–13)
+      - Dynamics AX migrations; cost reductions on procurement (20–45%)
+  - title: IT Lead
+    company: Medisist
+    dates: 2016-06 to 2018-02
+    highlights:
+      - Managed MS-SQL & server envs with sensitive US medical records
+      - Telemedicine deployment for Mexico’s Health Secretariat
+
+EDUCATION_CERTS:
+  - Bachelor’s in Information Systems — Universidad de Guadalajara
+  - Diploma in Project Management (PMI, Scrum, Lean Six Sigma)
+  - Lean Six Sigma (Yellow, Green, Black Belt)
+  - Scrum Master & PMP (in progress)
+
+FIT_EVALUATION_GUIDE:
+  score_scale: 0-100
+  weightings:
+    title_match: 0.25
+    skills_match: 0.35
+    seniority_match: 0.10
+    remote_region: 0.10
+    domain_industry: 0.10
+    language_requirements: 0.10
+  decision_rule:
+    if score >= 70: {Status: "To-Apply", NextAction: "Prepare-Apply", SLA: "+24h"}
+
+
+# AUTO-LEARNING (pro_trainer)
+- Última actualización: 2025-10-17 23:36:48
+- Mercado observado (prom. comp.): 134000.0
+- Fit promedio observado: 0.0

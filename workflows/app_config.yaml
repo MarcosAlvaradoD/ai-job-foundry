@@ -1,0 +1,35 @@
+ai_provider: lmstudio
+ai_model: qwen/qwen3-4b-thinking-2507
+sheet_url: https://docs.google.com/spreadsheets/d/1KzCLI-D83bcPAD-W9uIsiB4UYEZocpSyG_TOpdQnix8/edit?usp=sharing
+google_account: markalvati@gmail.com
+cv_pdf: C:/Users/MSI/Documents/Resume/AlvaradoMarcos.pdf
+secure_session: true
+cover_language: es
+cover_tone: profesional
+cover_words_min: 160
+cover_words_max: 220
+cover_structured: false
+cover_template: 'Escribe una carta de presentación de {words_min}-{words_max} palabras
+  en {language}, tono {tone}, para {candidate_name} postulando a {job_title} en {company}.
+  Resume el puesto: {job_summary}.
+
+
+  Usa y referencia estos bullets del CV:
+
+  {cv_bullets}
+
+
+  Responde SOLO con la carta final en Markdown.'
+first_name: ''
+middle_name: ''
+last_name1: ''
+last_name2: ''
+address: ''
+languages: ''
+education: ''
+job1_header: ''
+job1_bullets: ''
+job2_header: ''
+job2_bullets: ''
+job3_header: ''
+job3_bullets: ''
