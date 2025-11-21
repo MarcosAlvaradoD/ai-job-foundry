@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python investigate_urls.py:*)",
+      "Bash(python3:*)",
+      "Bash(where:*)",
+      "Bash(py investigate_urls.py:*)",
+      "Bash(dir:*)",
+      "Bash(findstr:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

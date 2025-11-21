@@ -55,16 +55,21 @@ def col_index_by_name(headers: List[str], wanted: str, aliases: List[str] = None
 
 # -------------------- Google Sheets --------------------
 def get_service() -> Any:
+    import pathlib
+    base_dir = pathlib.Path(__file__).parent.parent.parent  # Go to project root
+    token_path = base_dir / "data" / "credentials" / "token.json"
+    creds_path = base_dir / "data" / "credentials" / "credentials.json"
+    
     creds = None
-    if os.path.exists("../data/credentials/token.json"):
-        creds = Credentials.from_authorized_user_file("../data/credentials/token.json", SCOPES)
+    if token_path.exists():
+        creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
     else:
-        flow = InstalledAppFlow.from_client_secrets_file("credentials.json", SCOPES)
+        flow = InstalledAppFlow.from_client_secrets_file(str(creds_path), SCOPES)
         # Nota: abrirá una URL para autorizar y guardará token.json
         creds = flow.run_local_server(port=0)
-        with open("../data/credentials/token.json","w",encoding="utf-8") as f:
+        with open(str(token_path),"w",encoding="utf-8") as f:
             f.write(creds.to_json())
-        print("🔑 token.json generado.")
+        print("token.json generado.")
     return build("sheets", "v4", credentials=creds)
 
 def fetch_headers(service, sheet_id: str, tab: str) -> List[str]:

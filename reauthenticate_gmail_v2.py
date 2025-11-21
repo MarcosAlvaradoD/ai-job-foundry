@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Gmail OAuth Re-authentication Script
+Gmail OAuth Re-authentication Script (Windows-compatible, no emojis)
 Regenera token.json cuando el OAuth client fue eliminado o expiró
 """
 import os
@@ -26,7 +26,7 @@ SCOPES = [
 def main():
     """Re-authenticate Gmail and regenerate token"""
     print("\n" + "="*70)
-    print("🔐 GMAIL OAUTH RE-AUTHENTICATION")
+    print("GMAIL OAUTH RE-AUTHENTICATION")
     print("="*70)
     
     # Paths
@@ -36,28 +36,28 @@ def main():
     
     # Verify credentials.json exists
     if not credentials_path.exists():
-        print(f"\n❌ ERROR: No se encontró credentials.json")
-        print(f"   Ubicación esperada: {credentials_path}")
-        print(f"\n📝 PASOS PARA OBTENER credentials.json:")
+        print(f"\n[ERROR] No se encontro credentials.json")
+        print(f"   Ubicacion esperada: {credentials_path}")
+        print(f"\nPASOS PARA OBTENER credentials.json:")
         print("   1. Ve a: https://console.cloud.google.com/")
         print("   2. Crea/selecciona un proyecto")
         print("   3. Habilita Gmail API y Google Sheets API")
         print("   4. Crea credenciales OAuth 2.0")
-        print("   5. Descarga el JSON y guárdalo como credentials.json")
-        print(f"   6. Colócalo en: {creds_dir}")
+        print("   5. Descarga el JSON y guardalo como credentials.json")
+        print(f"   6. Colocalo en: {creds_dir}")
         return 1
     
-    print(f"\n✅ credentials.json encontrado")
+    print(f"\n[OK] credentials.json encontrado")
     
     # Delete old token if exists
     if token_path.exists():
-        print(f"🗑️  Eliminando token antiguo...")
+        print(f"[INFO] Eliminando token antiguo...")
         token_path.unlink()
-        print(f"   ✅ Token eliminado")
+        print(f"   [OK] Token eliminado")
     
     # Start OAuth flow
-    print(f"\n🌐 Iniciando flujo OAuth...")
-    print(f"   Se abrirá tu navegador para autenticación")
+    print(f"\n[INFO] Iniciando flujo OAuth...")
+    print(f"   Se abrira tu navegador para autenticacion")
     print(f"   IMPORTANTE: Acepta TODOS los permisos solicitados\n")
     
     try:
@@ -69,8 +69,8 @@ def main():
         # Run local server for OAuth callback
         creds = flow.run_local_server(
             port=0,
-            authorization_prompt_message='🔐 Abriendo navegador para autenticación...',
-            success_message='✅ ¡Autenticación exitosa! Puedes cerrar esta ventana.',
+            authorization_prompt_message='Abriendo navegador para autenticacion...',
+            success_message='Autenticacion exitosa! Puedes cerrar esta ventana.',
             open_browser=True
         )
         
@@ -79,16 +79,16 @@ def main():
             token_file.write(creds.to_json())
         
         print("\n" + "="*70)
-        print("✅ RE-AUTENTICACIÓN EXITOSA")
+        print("[SUCCESS] RE-AUTENTICACION EXITOSA")
         print("="*70)
-        print(f"📁 Nuevo token guardado en: {token_path}")
-        print(f"🔑 Scopes autorizados:")
+        print(f"Nuevo token guardado en: {token_path}")
+        print(f"Scopes autorizados:")
         for scope in SCOPES:
-            print(f"   • {scope.split('/')[-1]}")
+            print(f"   - {scope.split('/')[-1]}")
         
-        print("\n💡 PRÓXIMOS PASOS:")
+        print("\nPROXIMOS PASOS:")
         print("   1. Ejecuta: py control_center.py")
-        print("   2. Prueba Opción 1 (Pipeline Completo)")
+        print("   2. Prueba Opcion 1 (Pipeline Completo)")
         print("   3. Verifica que no hay errores de OAuth")
         print("\n")
         
@@ -96,13 +96,13 @@ def main():
         
     except Exception as e:
         print("\n" + "="*70)
-        print("❌ ERROR EN RE-AUTENTICACIÓN")
+        print("[ERROR] ERROR EN RE-AUTENTICACION")
         print("="*70)
         print(f"Error: {str(e)}\n")
         
-        print("🔧 TROUBLESHOOTING:")
-        print("   1. Verifica que credentials.json es válido")
-        print("   2. Asegúrate de que Gmail API está habilitado")
+        print("TROUBLESHOOTING:")
+        print("   1. Verifica que credentials.json es valido")
+        print("   2. Asegurate de que Gmail API esta habilitado")
         print("   3. Verifica que el proyecto OAuth no fue eliminado")
         print("   4. Intenta crear nuevas credenciales OAuth")
         print("\n")

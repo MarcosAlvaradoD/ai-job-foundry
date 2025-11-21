@@ -30,6 +30,11 @@ desktop.ini
 data/credentials/*.json
 data/credentials/*.txt
 data/credentials/token*.json
+workflows/google_credentials.json
+workflows/token.json
+*.json.old
+**/token.json
+**/credentials.json
 
 # Datos locales
 data/raw_jobs/
@@ -73,3 +78,17 @@ data/browser_data_indeed/
 
 # MCP servers (submodules)
 mcp-servers/
+
+# ========================================
+# CREDENTIALS - NUNCA SUBIR A GITHUB
+# ========================================
+data/credentials/*.json
+workflows/google_credentials.json
+workflows/token.json
+*.json.old
+**/credentials.json
+**/token.json
+
+# Archivos sensibles
+*.env.local
+*.env.production

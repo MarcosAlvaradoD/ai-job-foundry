@@ -20,8 +20,8 @@ LOG_TO_FILE     = True
 SEEN_IDS_FILE   = "state/seen_ids.json"
 
 # OAuth
-CLIENT_SECRETS_FILE = "credentials.json"
-TOKEN_PATH          = "../data/credentials/token.json"
+CLIENT_SECRETS_FILE = "data/credentials/credentials.json"
+TOKEN_PATH          = "data/credentials/token.json"
 # ====================================================
 
 import re, json, base64, pathlib, datetime as dt
@@ -218,25 +218,112 @@ def get_message(gsvc, msg_id):
     return gsvc.users().messages().get(userId="me", id=msg_id, format="raw").execute()
 
 def parse_email_raw(raw_b64):
+    """
+    Parse email and extract BOTH text/plain AND text/html content.
+    
+    Many recruiter emails are HTML-only, so we need to extract HTML
+    and convert to text to find URLs.
+    """
+    from bs4 import BeautifulSoup
+    
     raw_bytes = base64.urlsafe_b64decode(raw_b64.encode("utf-8"))
     msg = BytesParser(policy=policy.default).parsebytes(raw_bytes)
     subject = msg["subject"] or ""
     sender  = msg["from"] or ""
-    body = ""
+    
+    plain_body = ""
+    html_body = ""
+    
+    # Extract BOTH plain text and HTML
     if msg.is_multipart():
         for part in msg.walk():
-            if (part.get_content_type() or "") == "text/plain":
-                try: body += part.get_content()
-                except: pass
+            content_type = part.get_content_type() or ""
+            try:
+                if content_type == "text/plain":
+                    plain_body += part.get_content()
+                elif content_type == "text/html":
+                    html_body += part.get_content()
+            except:
+                pass
     else:
-        if (msg.get_content_type() or "") == "text/plain":
-            try: body = msg.get_content()
-            except: pass
-    return subject, sender, body
+        content_type = msg.get_content_type() or ""
+        try:
+            if content_type == "text/plain":
+                plain_body = msg.get_content()
+            elif content_type == "text/html":
+                html_body = msg.get_content()
+        except:
+            pass
+    
+    # Combine both sources
+    combined_body = plain_body
+    
+    # If HTML exists, parse it and add to body
+    if html_body:
+        try:
+            soup = BeautifulSoup(html_body, 'html.parser')
+            # Extract text from HTML
+            html_text = soup.get_text(separator='\n', strip=True)
+            # Also extract all URLs from href attributes
+            links = [a.get('href', '') for a in soup.find_all('a', href=True)]
+            # Add extracted text and links to body
+            combined_body += "\n" + html_text
+            combined_body += "\n" + "\n".join(links)
+        except Exception as e:
+            log(f"[WARN] HTML parsing failed: {e}")
+    
+    return subject, sender, combined_body
 
-def first_url(text):
-    m = re.search(r'https?://\S+', text)
-    return m.group(0) if m else ""
+def extract_job_url(text: str) -> str:
+    """
+    Extract job application URL with smart filtering.
+    Prioritizes actual job URLs over tracking/social links.
+    """
+    urls = re.findall(r'https?://[^\s<>"]+', text)
+    if not urls:
+        return ""
+    
+    # Job board patterns (score, pattern)
+    job_patterns = [
+        (100, r'linkedin\.com/jobs/view/\d+'),
+        (95, r'indeed\.com/viewjob'),
+        (95, r'glassdoor\.com/job-listing/'),
+        (90, r'linkedin\.com/comm/jobs'),
+        (90, r'indeed\.com.*?jk='),
+        (90, r'glassdoor\.com.*?jl='),
+        (80, r'myworkdayjobs\.com'),
+        (80, r'greenhouse\.io'),
+        (80, r'lever\.co'),
+        (80, r'icims\.com'),
+        (70, r'careers\.|jobs\.|apply\.'),
+    ]
+    
+    # Avoid patterns
+    avoid = [
+        r'unsubscribe', r'preferences', r'settings', r'pixel\.', r'1x1\.gif',
+        r'track\.', r'analytics\.', r'facebook\.com', r'twitter\.com',
+        r'linkedin\.com/e/v2', r'linkedin\.com/comm/pulse', r'support\.', r'help\.'
+    ]
+    
+    scored_urls = []
+    for url in urls:
+        url_lower = url.lower()
+        if any(re.search(p, url_lower) for p in avoid):
+            continue
+        
+        score = 50  # base score
+        for points, pattern in job_patterns:
+            if re.search(pattern, url_lower):
+                score = points
+                break
+        
+        scored_urls.append((score, url))
+    
+    if not scored_urls:
+        return ""
+    
+    scored_urls.sort(reverse=True)
+    return scored_urls[0][1]
 
 def detect_source(subject, sender, body, url):
     low = (subject + " " + sender + " " + body + " " + url).lower()
@@ -347,7 +434,7 @@ def main():
 
         msg = get_message(gsvc, mid)
         subject, sender, body = parse_email_raw(msg["raw"])
-        url = first_url(subject + "\n" + body)
+        url = extract_job_url(subject + "\n" + body)
         source = detect_source(subject, sender, body, url)
         tab = {
             "LinkedIn": TAB_LINKEDIN,

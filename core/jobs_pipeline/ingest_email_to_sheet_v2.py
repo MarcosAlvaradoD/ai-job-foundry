@@ -17,11 +17,11 @@ LABEL_PATH      = "JOBS/Inbound"
 QUERY_DAYS      = 60
 MAX_RESULTS     = 50
 LOG_TO_FILE     = True
-SEEN_IDS_FILE   = "state/seen_ids.json"
+SEEN_IDS_FILE   = "data/state/seen_ids.json"
 
 # OAuth
-CLIENT_SECRETS_FILE = "credentials.json"
-TOKEN_PATH          = "token.json"
+CLIENT_SECRETS_FILE = "data/credentials/credentials.json"
+TOKEN_PATH          = "data/credentials/token.json"
 # ====================================================
 
 import re, json, base64, pathlib, datetime as dt
@@ -29,7 +29,7 @@ from email import policy
 from email.parser import BytesParser
 from urllib.parse import urlparse, parse_qsl, urlunparse, urlencode
 
-pathlib.Path("state").mkdir(exist_ok=True)
+pathlib.Path("data/state").mkdir(parents=True, exist_ok=True)
 
 # ---- columnas únicas y en orden (24 -> X)
 HEADERS = [
@@ -54,10 +54,12 @@ from google.auth.transport.requests import Request
 from googleapiclient.discovery import build
 
 SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
     "https://www.googleapis.com/auth/gmail.readonly",
     "https://www.googleapis.com/auth/gmail.modify",
+    "https://www.googleapis.com/auth/gmail.labels",
     "https://www.googleapis.com/auth/gmail.send",
-    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/calendar"
 ]
 
 def get_creds():
