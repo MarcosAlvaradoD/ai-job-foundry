@@ -116,3 +116,27 @@ web/dashboard.html
 *.key
 *.secret
 **/api_keys.txt
+
+# ========================================
+# CREDENTIALS - NUNCA SUBIR A GITHUB
+# ========================================
+data/credentials/*.json
+workflows/google_credentials.json
+workflows/token.json
+*.json.old
+**/credentials.json
+**/token.json
+
+# Dashboards con API keys (usar dashboard_secure.html)
+web/dashboard.html
+
+# Environment files
+.env
+.env.local
+.env.production
+*.env
+
+# API Keys y secretos
+*.key
+*.secret
+**/api_keys.txt
