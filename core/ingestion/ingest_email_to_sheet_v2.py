@@ -286,10 +286,11 @@ def extract_job_url(text: str) -> str:
     # Job board patterns (score, pattern)
     job_patterns = [
         (100, r'linkedin\.com/jobs/view/\d+'),
-        (95, r'indeed\.com/viewjob'),
+        (100, r'indeed\.com/viewjob\?jk='),  # ✅ IMPROVED: More specific Indeed pattern
+        (95, r'indeed\.com/.*?jk=[a-f0-9]+'),  # ✅ IMPROVED: Indeed with job key
         (95, r'glassdoor\.com/job-listing/'),
         (90, r'linkedin\.com/comm/jobs'),
-        (90, r'indeed\.com.*?jk='),
+        (90, r'indeed\.com/rc/clk\?jk='),  # ✅ NEW: Indeed click tracking URLs
         (90, r'glassdoor\.com.*?jl='),
         (80, r'myworkdayjobs\.com'),
         (80, r'greenhouse\.io'),
@@ -302,7 +303,9 @@ def extract_job_url(text: str) -> str:
     avoid = [
         r'unsubscribe', r'preferences', r'settings', r'pixel\.', r'1x1\.gif',
         r'track\.', r'analytics\.', r'facebook\.com', r'twitter\.com',
-        r'linkedin\.com/e/v2', r'linkedin\.com/comm/pulse', r'support\.', r'help\.'
+        r'linkedin\.com/e/v2', r'linkedin\.com/comm/pulse', r'support\.', r'help\.',
+        r'profOnboarding',  # ✅ NEW: Avoid Indeed onboarding redirects
+        r'indeed\.com/\?from=',  # ✅ NEW: Avoid Indeed homepage redirects
     ]
     
     scored_urls = []

@@ -1,98 +1,177 @@
-# Organize Project Structure - AI Job Foundry
-# Moves files to proper directories
+# =====================================================
+# ORGANIZADOR AUTOMÁTICO - AI JOB FOUNDRY
+# =====================================================
+# Organiza archivos sueltos en la raíz del proyecto
 
-Write-Host "`n📁 ORGANIZANDO PROYECTO...`n" -ForegroundColor Cyan
+$ErrorActionPreference = "Continue"
 
-$root = "C:\Users\MSI\Desktop\ai-job-foundry"
-Set-Location $root
+Write-Host ""
+Write-Host "======================================================" -ForegroundColor Cyan
+Write-Host "  ORGANIZANDO PROYECTO AI JOB FOUNDRY" -ForegroundColor Cyan
+Write-Host "======================================================" -ForegroundColor Cyan
+Write-Host ""
 
-# Create necessary directories
-$dirs = @(
-    "scripts\git",
-    "scripts\setup",
-    "core\copilot",
-    "archive\migrations",
-    "archive\old_scripts"
+$raiz = "C:\Users\MSI\Desktop\ai-job-foundry"
+Set-Location $raiz
+
+# =====================================================
+# CREAR CARPETAS SI NO EXISTEN
+# =====================================================
+
+$carpetas = @(
+    "scripts\tests",
+    "scripts\maintenance", 
+    "docs\audit",
+    "docs\session_reports"
 )
 
-foreach ($dir in $dirs) {
-    if (!(Test-Path $dir)) {
-        New-Item -ItemType Directory -Path $dir -Force | Out-Null
-        Write-Host "📂 Created: $dir" -ForegroundColor Green
+foreach ($carpeta in $carpetas) {
+    $path = Join-Path $raiz $carpeta
+    if (-not (Test-Path $path)) {
+        New-Item -ItemType Directory -Path $path -Force | Out-Null
+        Write-Host "[+] Creada: $carpeta" -ForegroundColor Green
     }
 }
 
-# Move Git scripts
-$gitScripts = @("fix_git_rebase.ps1", "git_clean_commit.ps1", "git_clean_history.ps1", "git_force_commit.ps1")
-foreach ($file in $gitScripts) {
+# =====================================================
+# MOVER ARCHIVOS - TESTS
+# =====================================================
+
+Write-Host ""
+Write-Host ">>> Organizando TESTS..." -ForegroundColor Yellow
+
+$tests = @(
+    "TEST_FITSCORE_FIX.py",
+    "DEBUG_SCRAPERS.py",
+    "ANALYZE_SHEETS.py"
+)
+
+foreach ($file in $tests) {
     if (Test-Path $file) {
-        Move-Item $file "scripts\git\" -Force
-        Write-Host "✅ Moved $file → scripts\git\" -ForegroundColor Green
+        Move-Item $file "scripts\tests\" -Force
+        Write-Host "  [OK] $file -> scripts\tests\" -ForegroundColor Green
     }
 }
 
-# Move test files
-$testFiles = @("test_ai_workbenches.py", "test_gmail_connection.py")
-foreach ($file in $testFiles) {
+# =====================================================
+# MOVER ARCHIVOS - FIXES
+# =====================================================
+
+Write-Host ""
+Write-Host ">>> Organizando FIXES..." -ForegroundColor Yellow
+
+$fixFiles = @(
+    "FIX_AUTO_APPLY_PIPELINE.py",
+    "FIX_BULLETIN_QUERY.py", 
+    "FIX_DASHBOARD_OPTION.py",
+    "PATCH_CONTROL_CENTER.py",
+    "RESTORE_SAFE.py"
+)
+
+foreach ($file in $fixFiles) {
     if (Test-Path $file) {
-        Move-Item $file "scripts\" -Force
-        Write-Host "✅ Moved $file → scripts\" -ForegroundColor Green
+        Move-Item $file "fixes\" -Force
+        Write-Host "  [OK] $file -> fixes\" -ForegroundColor Green
     }
 }
 
-# Move interview copilot files
-$copilotFiles = @("interview_copilot_session_recorder.py", "interview_copilot_simple.py")
-foreach ($file in $copilotFiles) {
+# =====================================================
+# MOVER ARCHIVOS - MAINTENANCE
+# =====================================================
+
+Write-Host ""
+Write-Host ">>> Organizando MAINTENANCE..." -ForegroundColor Yellow
+
+$maintenance = @(
+    "mark_all_negatives.py",
+    "mark_expired_jobs.py",
+    "recalculate_fit_scores.py",
+    "standardize_status.py",
+    "standardize_status_v2.py",
+    "standardize_status_v3.py",
+    "update_status_from_emails.py",
+    "verify_job_status.py",
+    "check_oauth_token.py",
+    "process_bulletins.py"
+)
+
+foreach ($file in $maintenance) {
     if (Test-Path $file) {
-        Move-Item $file "core\copilot\" -Force
-        Write-Host "✅ Moved $file → core\copilot\" -ForegroundColor Green
+        Move-Item $file "scripts\maintenance\" -Force
+        Write-Host "  [OK] $file -> scripts\maintenance\" -ForegroundColor Green
     }
 }
 
-# Move migration files
-$migrationFiles = @("migrate_from_jobs.py", "migration_log_20251106_021245.txt")
-foreach ($file in $migrationFiles) {
+# =====================================================
+# MOVER ARCHIVOS - DOCUMENTATION
+# =====================================================
+
+Write-Host ""
+Write-Host ">>> Organizando DOCUMENTATION..." -ForegroundColor Yellow
+
+$docs = @(
+    "AUDITORIA_COMPLETA.md",
+    "AUDITORIA_PROYECTO_02DIC2025.md",
+    "DIAGNOSTICO_COMPLETO_02DIC.md",
+    "INDICE_AUDITORIA.txt",
+    "INDICE_DIAGNOSTIC.txt",
+    "RESUMEN_EJECUTIVO_AUDITORIA.md",
+    "RESUMEN_EJECUTIVO_DIAGNOSTIC.md"
+)
+
+foreach ($file in $docs) {
     if (Test-Path $file) {
-        Move-Item $file "archive\migrations\" -Force
-        Write-Host "✅ Moved $file → archive\migrations\" -ForegroundColor Green
+        Move-Item $file "docs\audit\" -Force
+        Write-Host "  [OK] $file -> docs\audit\" -ForegroundColor Green
     }
 }
 
-# Move old scripts
-$oldScripts = @("sync_with_sheets.py", "sync_with_sheets1.py", "register_from_sheets.py", "job_tracker.py")
-foreach ($file in $oldScripts) {
+# =====================================================
+# MOVER ARCHIVOS - SESSION REPORTS
+# =====================================================
+
+Write-Host ""
+Write-Host ">>> Organizando SESSION REPORTS..." -ForegroundColor Yellow
+
+$reports = @(
+    "RESUMEN_SESION_2025-12-02.md"
+)
+
+foreach ($file in $reports) {
     if (Test-Path $file) {
-        Move-Item $file "archive\old_scripts\" -Force
-        Write-Host "✅ Moved $file → archive\old_scripts\" -ForegroundColor Green
+        Move-Item $file "docs\session_reports\" -Force
+        Write-Host "  [OK] $file -> docs\session_reports\" -ForegroundColor Green
     }
 }
 
-# Move setup files
-$setupFiles = @("setup_git_repo.cmd", "install_copilot_deps.ps1", "reauthenticate_gmail.py", "fix_oauth_scope.py", "fix_sheets_import.py")
-foreach ($file in $setupFiles) {
-    if (Test-Path $file) {
-        Move-Item $file "scripts\setup\" -Force
-        Write-Host "✅ Moved $file → scripts\setup\" -ForegroundColor Green
-    }
-}
+# =====================================================
+# ARCHIVOS QUE SE QUEDAN EN LA RAÍZ
+# =====================================================
 
-# Move resume files
-$resumeFiles = @("RESUMEN_FINAL_18NOV.txt", "RESUMEN_FIXES_FINAL.txt")
-foreach ($file in $resumeFiles) {
-    if (Test-Path $file) {
-        Move-Item $file "docs\" -Force
-        Write-Host "✅ Moved $file → docs\" -ForegroundColor Green
-    }
-}
+Write-Host ""
+Write-Host ">>> Archivos que permanecen en RAÍZ:" -ForegroundColor Cyan
+Write-Host "  [OK] PROJECT_STATUS.md (referencia principal)" -ForegroundColor Gray
+Write-Host "  [OK] MASTER_FEATURE_ROADMAP.md (roadmap)" -ForegroundColor Gray
+Write-Host "  [OK] README.md (documentación)" -ForegroundColor Gray
+Write-Host "  [OK] requirements.txt (dependencias)" -ForegroundColor Gray
+Write-Host "  [OK] control_center.py (launcher principal)" -ForegroundColor Gray
+Write-Host "  [OK] run_daily_pipeline.py (pipeline principal)" -ForegroundColor Gray
+Write-Host "  [OK] *.bat (scripts de inicio)" -ForegroundColor Gray
+Write-Host "  [OK] .env, .gitignore, etc (config)" -ForegroundColor Gray
 
-Write-Host "`n✅ ORGANIZACIÓN COMPLETADA!`n" -ForegroundColor Green
-Write-Host "📊 Estructura del proyecto:" -ForegroundColor Cyan
-Write-Host "  scripts/git/          - Scripts de Git" -ForegroundColor Gray
-Write-Host "  scripts/setup/        - Scripts de configuración" -ForegroundColor Gray
-Write-Host "  scripts/              - Scripts de testing" -ForegroundColor Gray
-Write-Host "  core/copilot/         - Interview copilot" -ForegroundColor Gray
-Write-Host "  archive/migrations/   - Archivos de migración" -ForegroundColor Gray
-Write-Host "  archive/old_scripts/  - Scripts deprecados" -ForegroundColor Gray
-Write-Host "  docs/                 - Documentación" -ForegroundColor Gray
+# =====================================================
+# RESUMEN
+# =====================================================
 
-Write-Host "`n================================`n" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "======================================================" -ForegroundColor Cyan
+Write-Host "  ORGANIZACION COMPLETADA" -ForegroundColor Cyan
+Write-Host "======================================================" -ForegroundColor Cyan
+Write-Host ""
+Write-Host "Nueva estructura:" -ForegroundColor Yellow
+Write-Host "  scripts\tests\         - Scripts de prueba" -ForegroundColor White
+Write-Host "  scripts\maintenance\   - Scripts de mantenimiento" -ForegroundColor White
+Write-Host "  fixes\                 - Scripts de correccion" -ForegroundColor White
+Write-Host "  docs\audit\            - Auditorias y diagnosticos" -ForegroundColor White
+Write-Host "  docs\session_reports\  - Reportes de sesiones" -ForegroundColor White
+Write-Host ""

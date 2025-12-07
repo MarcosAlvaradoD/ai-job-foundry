@@ -1,50 +1,70 @@
-# Python
-__pycache__/
-*.pyc
-*.pyo
-*.egg-info/
+# ========================================
+# AI JOB FOUNDRY - GITIGNORE
+# ========================================
 
-# Datos sensibles
-credentials.json
-token.json
-*.token
-*.key
-.env
-config/credentials/
-
-# Datos locales
-data/job_applications.json
-data/interview_logs/
-logs/
-*.log
-
-# Node
-node_modules/
-
-# Sistema
-.DS_Store
-Thumbs.db
-desktop.ini
-
-# Credenciales y datos sensibles
+# ========================================
+# CREDENTIALS - NEVER UPLOAD TO GITHUB
+# ========================================
+# Google OAuth
 data/credentials/*.json
-data/credentials/*.txt
-data/credentials/token*.json
+data/credentials/credentials.json
+data/credentials/token.json
 workflows/google_credentials.json
 workflows/token.json
-*.json.old
-**/token.json
 **/credentials.json
+**/token.json
+*.json.old
 
-# Datos locales
-data/raw_jobs/
+# Environment files
+.env
+.env.local
+.env.production
+*.env
+
+# API Keys
+*.key
+*.secret
+**/api_keys.txt
+
+# ========================================
+# SESSION & PERSONAL DATA
+# ========================================
+# LinkedIn session data
+data/linkedin_cookies.json
+data/browser_data/
+data/browser_data_indeed/
+
+# State tracking files
+data/state/*.json
+state/*.json
+data/state/seen_ids.json
+data/state/processed_bulletins.txt
+
+# Personal data
+data/cv_descriptor.txt
+data/cover_letters/
+data/marcos_*.txt
+data/job_applications.json
 data/applications/
 data/interviews/
+data/interview_logs/
 
-# Logs
-logs/*.log
+# ========================================
+# LOGS & DEBUG FILES
+# ========================================
+logs/
+logs/**/*.log
+logs/powershell/*.log
+*.log
+ingest.log
 
-# Python
+# Playwright debug artifacts
+**/debug_*.html
+**/screenshot_*.png
+
+# ========================================
+# PYTHON
+# ========================================
 __pycache__/
 *.pyc
 *.pyo
@@ -55,88 +75,53 @@ dist/
 build/
 venv/
 env/
+*.so
 
-# IDE
+# ========================================
+# NODE / JAVASCRIPT
+# ========================================
+node_modules/
+package-lock.json
+yarn.lock
+
+# ========================================
+# IDE & EDITORS
+# ========================================
 .vscode/
 .idea/
 *.swp
 *.swo
+*.sublime-*
+.vs/
 
-# OS
+# ========================================
+# OPERATING SYSTEM
+# ========================================
 .DS_Store
 Thumbs.db
+desktop.ini
+*.lnk
 
-# Archivos temporales
+# ========================================
+# TEMPORARY FILES
+# ========================================
 *.tmp
 *.bak
 *.backup
+*_BACKUP/
 *_ARCHIVE/
+*_OLD/
+temp/
+tmp/
 
-# Browser data (Playwright)
-data/browser_data/
-data/browser_data_indeed/
+# ========================================
+# PROJECT SPECIFIC
+# ========================================
+# Dashboards with embedded API keys
+web/dashboard.html
 
-# MCP servers (submodules)
+# MCP servers (if using submodules)
 mcp-servers/
 
-# ========================================
-# CREDENTIALS - NUNCA SUBIR A GITHUB
-# ========================================
-data/credentials/*.json
-workflows/google_credentials.json
-workflows/token.json
-*.json.old
-**/credentials.json
-**/token.json
-
-# Archivos sensibles
-*.env.local
-*.env.production
-
-# ========================================
-# CREDENTIALS - NUNCA SUBIR A GITHUB
-# ========================================
-data/credentials/*.json
-workflows/google_credentials.json
-workflows/token.json
-*.json.old
-**/credentials.json
-**/token.json
-
-# Dashboards con API keys (usar dashboard_secure.html)
-web/dashboard.html
-
-# Environment files
-.env
-.env.local
-.env.production
-*.env
-
-# API Keys y secretos
-*.key
-*.secret
-**/api_keys.txt
-
-# ========================================
-# CREDENTIALS - NUNCA SUBIR A GITHUB
-# ========================================
-data/credentials/*.json
-workflows/google_credentials.json
-workflows/token.json
-*.json.old
-**/credentials.json
-**/token.json
-
-# Dashboards con API keys (usar dashboard_secure.html)
-web/dashboard.html
-
-# Environment files
-.env
-.env.local
-.env.production
-*.env
-
-# API Keys y secretos
-*.key
-*.secret
-**/api_keys.txt
+# Raw scraped data
+data/raw_jobs/

@@ -47,6 +47,12 @@ class JobBulletinProcessor:
         self.processed_cache_file = Path(__file__).parent.parent.parent / 'data' / 'state' / 'processed_bulletins.txt'
         self.processed_cache_file.parent.mkdir(parents=True, exist_ok=True)
         
+        # Track emails to delete
+        self.emails_to_delete = []
+        
+        # ✅ NUEVO: Cache de URLs existentes (para evitar rate limit)
+        self.existing_urls_cache = {}
+        
     def _get_credentials(self):
         """Get OAuth credentials"""
         creds = None
@@ -79,6 +85,110 @@ class JobBulletinProcessor:
         """Save processed bulletin ID"""
         with open(self.processed_cache_file, 'a') as f:
             f.write(f"{email_id}\n")
+    
+    def load_existing_urls(self, tab_name: str):
+        """
+        Carga TODAS las URLs existentes en el sheet UNA SOLA VEZ
+        
+        Args:
+            tab_name: Nombre de la pestaña
+        """
+        if tab_name in self.existing_urls_cache:
+            return  # Ya está cargado
+        
+        try:
+            result = self.sheets_service.spreadsheets().values().get(
+                spreadsheetId=self.sheet_id,
+                range=f"{tab_name}!F:F"  # Columna F = ApplyURL
+            ).execute()
+            
+            values = result.get('values', [])
+            
+            # Convertir a set para búsqueda rápida
+            self.existing_urls_cache[tab_name] = {row[0] for row in values if row}
+            
+            print(f"   📋 Loaded {len(self.existing_urls_cache[tab_name])} existing URLs from {tab_name}")
+            
+        except Exception as e:
+            print(f"   ⚠️  Error loading URLs: {e}")
+            self.existing_urls_cache[tab_name] = set()
+    
+    def check_job_exists_in_sheet(self, job_url: str, tab_name: str) -> bool:
+        """
+        Verifica si un job ya existe en el sheet comparando ApplyURL
+        USA CACHE LOCAL para evitar rate limits
+        
+        Args:
+            job_url: URL del job a verificar
+            tab_name: Nombre de la pestaña
+        
+        Returns:
+            True si el job ya existe, False si es nuevo
+        """
+        # Verificar contra cache (no API)
+        if tab_name not in self.existing_urls_cache:
+            return False  # Si no hay cache, asumir que es nuevo
+        
+        return job_url in self.existing_urls_cache[tab_name]
+    
+    def get_email_age_days(self, message: dict) -> int:
+        """
+        Obtiene la edad del email en días
+        
+        Args:
+            message: Mensaje de Gmail API
+        
+        Returns:
+            Edad del email en días
+        """
+        try:
+            from email.utils import parsedate_to_datetime
+            
+            # Buscar header 'Date'
+            headers = message.get('payload', {}).get('headers', [])
+            for header in headers:
+                if header['name'].lower() == 'date':
+                    email_date_str = header['value']
+                    email_date = parsedate_to_datetime(email_date_str)
+                    
+                    # Calcular diferencia
+                    now = datetime.now(email_date.tzinfo)
+                    age_days = (now - email_date).days
+                    
+                    return age_days
+            
+            return 0  # Si no se encuentra fecha, asumir reciente
+            
+        except Exception as e:
+            print(f"   ⚠️  Error getting email age: {e}")
+            return 0
+    
+    def mark_email_for_deletion(self, email_id: str):
+        """Marca un email para ser eliminado al final del proceso"""
+        self.emails_to_delete.append(email_id)
+    
+    def delete_marked_emails(self):
+        """Elimina todos los emails marcados para eliminación"""
+        if not self.emails_to_delete:
+            return
+        
+        print(f"\n🗑️  Eliminando {len(self.emails_to_delete)} emails procesados...")
+        
+        deleted_count = 0
+        for email_id in self.emails_to_delete:
+            try:
+                self.gmail_service.users().messages().trash(
+                    userId='me',
+                    id=email_id
+                ).execute()
+                deleted_count += 1
+            except Exception as e:
+                print(f"   ⚠️  Error deleting email {email_id}: {e}")
+        
+        print(f"   ✅ {deleted_count}/{len(self.emails_to_delete)} emails movidos a papelera")
+        
+        # Limpiar lista
+        self.emails_to_delete = []
     
     def extract_linkedin_jobs(self, html_content: str) -> List[Dict]:
         """Extract job listings from LinkedIn bulletin email"""
@@ -154,29 +264,61 @@ class JobBulletinProcessor:
         return jobs
     
     def extract_glassdoor_jobs(self, html_content: str) -> List[Dict]:
-        """Extract job listings from Glassdoor bulletin email"""
+        """
+        Extract job listings from Glassdoor bulletin email
+        
+        Glassdoor emails structure:
+        - Job info in <table> elements
+        - Title in <p> with font-weight:600 (14px)
+        - Company in <p> before title
+        - Location in <p> after title  
+        - Salary in <p> with k$ pattern
+        - job_listing_id in tracking pixel URL
+        """
         jobs = []
         
-        # Glassdoor URLs
-        url_pattern = r'https://www\.glassdoor\.com[^\s"<>]+'
-        urls = re.findall(url_pattern, html_content)
-        
-        # Job titles
-        title_pattern = r'<a[^>]*>([^<]+(?:Manager|Director|Lead|Analyst|Engineer)[^<]*)</a>'
-        titles = re.findall(title_pattern, html_content, re.IGNORECASE)
-        
-        for i, url in enumerate(urls):
-            if 'job-listing' in url or 'partner/jobListing' in url:
+        try:
+            # Extract job_listing_id from tracking URL (Pattern 4 - works!)
+            job_id_pattern = r'jobAlertAlert&amp;utm_content=ja-jobpos\d+-(\d+)'
+            job_ids = re.findall(job_id_pattern, html_content)
+            
+            # Extract job titles (font-weight:600, 14px)
+            title_pattern = r'<p style="font-size:14px;line-height:1\.4;margin:0;font-weight:600">([^<]+)</p>'
+            titles = re.findall(title_pattern, html_content)
+            
+            # Extract companies (appears before title in table structure)
+            company_pattern = r'<p style="font-size:12px;line-height:1\.33;margin:0;font-weight:400;white-space:normal">([^<]+)</p>'
+            companies = re.findall(company_pattern, html_content)
+            
+            # Extract locations (simpler pattern)
+            location_pattern = r'<p style="font-size:12px;line-height:1\.33;margin:0;margin-top:4px">([^<$]+)</p>'
+            locations = re.findall(location_pattern, html_content)
+            
+            # Extract salaries (pattern with k$)
+            salary_pattern = r'<p style="font-size:12px;line-height:1\.33;margin:0;margin-top:4px">(\d+\s*k\$[^<]*)</p>'
+            salaries = re.findall(salary_pattern, html_content)
+            
+            # Build jobs from extracted data
+            for i, title in enumerate(titles):
+                # Construct URL from job_listing_id
+                job_url = f"https://www.glassdoor.com/job-listing/JL_{job_ids[i]}.htm" if i < len(job_ids) else "Unknown"
+                
                 job = {
                     'Source': 'Glassdoor',
-                    'ApplyURL': url,
-                    'Role': titles[i] if i < len(titles) else 'Unknown Role',
-                    'Company': 'Unknown',
-                    'Location': 'Unknown',
-                    'CreatedAt': datetime.now().isoformat(),
+                    'ApplyURL': job_url,
+                    'Role': title.strip(),
+                    'Company': companies[i].strip() if i < len(companies) else 'Unknown',
+                    'Location': locations[i].strip() if i < len(locations) else 'Unknown',
+                    'Comp': salaries[i].strip() if i < len(salaries) else '',
+                    'CreatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     'Status': 'New'
                 }
                 jobs.append(job)
+            
+            print(f"   🔍 Extracted {len(titles)} titles, {len(companies)} companies, {len(job_ids)} job IDs")
+            
+        except Exception as e:
+            print(f"   ⚠️  Error extracting Glassdoor jobs: {e}")
         
         return jobs
     
@@ -263,6 +405,15 @@ class JobBulletinProcessor:
                 insertDataOption='INSERT_ROWS',
                 body={'values': rows}
             ).execute()
+            
+            # ✅ NUEVO: Actualizar cache con URLs guardadas
+            if tab_name not in self.existing_urls_cache:
+                self.existing_urls_cache[tab_name] = set()
+            
+            for job in jobs:
+                url = job.get('ApplyURL', '')
+                if url:
+                    self.existing_urls_cache[tab_name].add(url)
         
         return len(rows)
     
@@ -274,8 +425,12 @@ class JobBulletinProcessor:
         print("Processing job alert emails from LinkedIn, Indeed, and Glassdoor...")
         print("="*70 + "\n")
         
-        # Get bulletins from JOBS/Inbound
-        query = 'label:JOBS/Inbound newer_than:60d'
+        # Get bulletins - SOLO emails con ofertas de trabajo
+        query = (
+            'from:(noreply@glassdoor.com OR jobs-noreply@linkedin.com OR noreply@indeed.com) '
+            'subject:(empleos OR jobs OR "nuevos empleos" OR "new jobs" OR postúlate OR apply) '
+            'newer_than:7d'
+        )
         results = self.gmail_service.users().messages().list(
             userId='me',
             q=query,
@@ -288,10 +443,18 @@ class JobBulletinProcessor:
             print("No messages found in JOBS/Inbound")
             return
         
-        print(f"Found {len(messages)} emails to check\n")
-        
         # Load processed IDs
         processed_ids = self.get_processed_ids()
+        
+        print(f"Found {len(messages)} emails to check")
+        print(f"Already processed: {len(processed_ids)} IDs\n")
+        
+        # ✅ NUEVO: Cargar URLs existentes UNA SOLA VEZ (evita rate limit)
+        print("📋 Loading existing job URLs...")
+        self.load_existing_urls('Glassdoor')
+        self.load_existing_urls('LinkedIn')
+        self.load_existing_urls('Indeed')
+        print()
         
         total_jobs_found = 0
         bulletins_processed = 0
@@ -301,6 +464,7 @@ class JobBulletinProcessor:
             
             # Skip if already processed
             if msg_id in processed_ids:
+                print(f"⏭️  Already processed: {msg_id[:16]}...")
                 continue
             
             # Get full message
@@ -310,6 +474,13 @@ class JobBulletinProcessor:
                 format='raw'
             ).execute()
             
+            # ✅ NUEVO: Verificar edad del email
+            email_age = self.get_email_age_days(message)
+            if email_age > 7:
+                print(f"⏭️  Skipping old email ({email_age} days old)")
+                self.save_processed_id(msg_id)  # Marcar para no reprocessar
+                continue
+            
             # Parse email
             subject, sender, html_content, text_content = self.parse_email(message)
             
@@ -318,6 +489,7 @@ class JobBulletinProcessor:
             
             if not bulletin_type:
                 # Not a bulletin, skip
+                print(f"⏭️  Not a job bulletin: {subject[:50]}... (from: {sender[:30]}...)")
                 continue
             
             print(f"📨 Processing {bulletin_type.upper()} bulletin:")
@@ -335,12 +507,33 @@ class JobBulletinProcessor:
             if jobs:
                 print(f"   ✅ Found {len(jobs)} job listings")
                 
-                # Save to Sheets
-                saved = self.save_to_sheets(jobs, tab_name=bulletin_type.capitalize())
-                print(f"   💾 Saved {saved} jobs to Sheets\n")
+                # ✅ NUEVO: Filtrar duplicados ANTES de guardar
+                tab_name = bulletin_type.capitalize()
+                unique_jobs = []
+                duplicates_found = 0
                 
-                total_jobs_found += len(jobs)
+                for job in jobs:
+                    job_url = job.get('ApplyURL', '')
+                    if job_url and self.check_job_exists_in_sheet(job_url, tab_name):
+                        duplicates_found += 1
+                    else:
+                        unique_jobs.append(job)
+                
+                if duplicates_found > 0:
+                    print(f"   ⚠️  Skipped {duplicates_found} duplicates")
+                
+                # Solo guardar jobs únicos
+                if unique_jobs:
+                    saved = self.save_to_sheets(unique_jobs, tab_name=tab_name)
+                    print(f"   💾 Saved {saved} NEW jobs to Sheets")
+                    total_jobs_found += saved
+                else:
+                    print(f"   ℹ️  No new jobs (all were duplicates)")
+                
                 bulletins_processed += 1
+                
+                # ✅ NUEVO: Marcar email para eliminación
+                self.mark_email_for_deletion(msg_id)
                 
                 # Mark as processed
                 self.save_processed_id(msg_id)
@@ -352,6 +545,9 @@ class JobBulletinProcessor:
         print(f"   Bulletins processed: {bulletins_processed}")
         print(f"   Total jobs found: {total_jobs_found}")
         print("="*70 + "\n")
+        
+        # ✅ NUEVO: Eliminar emails procesados
+        self.delete_marked_emails()
 
 def main():
     processor = JobBulletinProcessor()

@@ -6,6 +6,7 @@ Controls the entire job search automation workflow
 Usage:
     py run_daily_pipeline.py --all              # Run complete pipeline
     py run_daily_pipeline.py --emails           # Process emails only
+    py run_daily_pipeline.py --bulletins        # Process bulletins only
     py run_daily_pipeline.py --analyze          # AI analysis only
     py run_daily_pipeline.py --apply            # Auto-apply only
     py run_daily_pipeline.py --emails --analyze # Email + AI
@@ -41,6 +42,24 @@ def run_email_processing():
         return True
     except Exception as e:
         log(f"Email processing failed: {e}", "ERROR")
+        return False
+
+def run_bulletin_processing():
+    """Step 1b: Process job bulletins from LinkedIn/Indeed/Glassdoor"""
+    log("STEP 1b: Processing bulletins...", "INFO")
+    
+    try:
+        from core.automation.job_bulletin_processor import JobBulletinProcessor
+        
+        processor = JobBulletinProcessor()
+        processor.process_bulletins(max_emails=50)
+        
+        log("Bulletin processing completed", "SUCCESS")
+        return True
+    except Exception as e:
+        log(f"Bulletin processing failed: {e}", "ERROR")
+        import traceback
+        traceback.print_exc()
         return False
 
 def run_ai_analysis():
@@ -96,84 +115,106 @@ def run_auto_apply(dry_run: bool = True):
         log("Dry run mode - no real applications", "WARN")
     
     try:
-        # TODO: Import auto-apply module when ready
-        log("Auto-apply module not implemented yet", "WARN")
+        # Import auto-apply module
+        import asyncio
+        from core.automation.auto_apply_linkedin import LinkedInAutoApplier
+        
+        # Run auto-applier (it handles job selection internally)
+        applier = LinkedInAutoApplier(dry_run=dry_run)
+        
+        # Run async applier (method is 'run' not 'process_jobs')
+        asyncio.run(applier.run())
+        
+        log(f"Auto-apply completed: {applier.applications_submitted} applications submitted", "SUCCESS")
         return True
+        
     except Exception as e:
         log(f"Auto-apply failed: {e}", "ERROR")
+        import traceback
+        traceback.print_exc()
         return False
 
 def check_expired_jobs():
-    """Step 4: Mark jobs as expired if >30 days old OR URL is dead"""
+    """
+    Step 4: Verify and cleanup expired jobs
+    
+    FLUJO:
+    1. Borra jobs ya marcados como EXPIRED (limpieza)
+    2. Verifica jobs actuales con Playwright (marca nuevos EXPIRED)
+    3. Próxima ejecución: borra los que se marcaron + marca nuevos
+    """
     log("STEP 4: Checking for expired jobs...", "INFO")
     
     try:
-        from core.sheets.sheet_manager import SheetManager
-        from datetime import timedelta
-        
-        sheet_manager = SheetManager()
-        jobs = sheet_manager.get_all_jobs()
-        
-        today = datetime.now()
-        expired_count = 0
-        
-        # Method 1: Check by date (>30 days)
-        log("  Checking by date (>30 days old)...", "INFO")
-        for job in jobs:
-            created_at = job.get('CreatedAt', '')
-            status = job.get('Status', '')
+        # PASO 1: Borrar jobs EXPIRED existentes
+        log("  [1/4] Deleting previously marked EXPIRED jobs...", "INFO")
+        try:
+            import subprocess
+            result = subprocess.run(
+                ['py', 'EXPIRE_LIFECYCLE.py', '--delete'],
+                capture_output=True,
+                text=True,
+                timeout=180  # 3 min max (increased from 2)
+            )
             
-            if not created_at or status in ['Applied', 'Rejected', 'Expired']:
-                continue
+            if result.returncode == 0:
+                # Parse output to get deletion count
+                output = result.stdout
+                if "TOTAL DELETED:" in output:
+                    deleted = output.split("TOTAL DELETED:")[1].split("\n")[0].strip()
+                    log(f"    ✅ Deleted {deleted} EXPIRED jobs", "SUCCESS")
+                else:
+                    log(f"    ✅ Cleanup completed", "SUCCESS")
+            else:
+                log(f"    ⚠️  Cleanup warning: {result.stderr[:100]}", "WARN")
+        except Exception as e:
+            log(f"    ⚠️  Cleanup skipped: {str(e)[:50]}", "WARN")
+        
+        # PASO 2: Verificar Glassdoor con Playwright
+        log("  [2/4] Verifying Glassdoor jobs with Playwright...", "INFO")
+        try:
+            from GLASSDOOR_SMART_VERIFIER import GlassdoorSmartVerifier
+            verifier = GlassdoorSmartVerifier()
+            results = verifier.verify_all(limit=None, mark_expired=True)
             
-            try:
-                created_date = datetime.fromisoformat(created_at)
-                days_old = (today - created_date).days
-                
-                if days_old > 30:
-                    # Mark as expired
-                    log(f"  Expiring: {job.get('Role')} at {job.get('Company')} ({days_old} days old)", "WARN")
-                    expired_count += 1
-                    row_index = job.get('row_index')
-                    if row_index:
-                        sheet_manager.update_job_status(row_index, 'Expired')
-            except:
-                continue
+            if results:
+                expired_count = len(results.get('expired', []))
+                active_count = len(results.get('active', []))
+                log(f"    ✅ Glassdoor: {expired_count} expired, {active_count} active", "SUCCESS")
+        except Exception as e:
+            log(f"    ⚠️  Glassdoor verification failed: {str(e)[:50]}", "WARN")
         
-        if expired_count > 0:
-            log(f"  Date check: Marked {expired_count} jobs as expired", "SUCCESS")
-        else:
-            log("  Date check: No expired jobs found", "INFO")
-        
-        # Method 2: Verify URLs (optional, can be slow)
-        log("  Verifying URLs (checking if postings are still live)...", "INFO")
-        
-        # Get jobs to verify (only New status, FIT >= 7, not expired by date)
-        jobs_to_verify = []
-        for job in jobs:
-            status = job.get('Status', '')
-            fit_score = job.get('FitScore', 0)
+        # PASO 3: Verificar LinkedIn con Playwright (usando V3 mejorada)
+        log("  [3/4] Verifying LinkedIn jobs with Playwright...", "INFO")
+        try:
+            from LINKEDIN_SMART_VERIFIER_V3 import LinkedInSmartVerifierV3
+            verifier = LinkedInSmartVerifierV3()
+            results = verifier.verify_all(limit=None, mark_expired=True)
             
-            if status == 'New':
-                try:
-                    if int(fit_score) >= 7:
-                        jobs_to_verify.append(job)
-                except:
-                    pass
+            if results:
+                expired_count = len(results.get('expired', []))
+                active_count = len(results.get('active', []))
+                log(f"    ✅ LinkedIn: {expired_count} expired, {active_count} active", "SUCCESS")
+        except Exception as e:
+            log(f"    ⚠️  LinkedIn verification failed: {str(e)[:50]}", "WARN")
         
-        if jobs_to_verify:
-            log(f"  Verifying {len(jobs_to_verify)} high-fit jobs...", "INFO")
+        # PASO 4: Verificar Indeed con Playwright
+        log("  [4/4] Verifying Indeed jobs with Playwright...", "INFO")
+        try:
+            from INDEED_SMART_VERIFIER import IndeedSmartVerifier
+            verifier = IndeedSmartVerifier()
+            results = verifier.verify_all(limit=None, mark_expired=True)
             
-            # Import and run verifier
-            from verify_job_status import JobStatusVerifier
-            verifier = JobStatusVerifier()
-            verifier.verify_jobs(jobs_to_verify[:5], rate_limit_seconds=3)  # Limit to 5 to save time
-            
-            log(f"  URL verification: {verifier.results['expired']} expired, {verifier.results['still_active']} active", "SUCCESS")
-        else:
-            log("  No high-fit jobs to verify", "INFO")
+            if results:
+                expired_count = len(results.get('expired', []))
+                active_count = len(results.get('active', []))
+                log(f"    ✅ Indeed: {expired_count} expired, {active_count} active", "SUCCESS")
+        except Exception as e:
+            log(f"    ⚠️  Indeed verification failed: {str(e)[:50]}", "WARN")
         
+        log("  ✅ Expiration check completed", "SUCCESS")
         return True
+        
     except Exception as e:
         log(f"Expired check failed: {e}", "ERROR")
         import traceback
@@ -249,15 +290,18 @@ def main():
 Examples:
   py run_daily_pipeline.py --all              # Full pipeline
   py run_daily_pipeline.py --emails           # Process emails only
+  py run_daily_pipeline.py --bulletins        # Process bulletins only
   py run_daily_pipeline.py --emails --analyze # Email + AI analysis
   py run_daily_pipeline.py --apply --dry-run  # Test auto-apply
         """
     )
     
     parser.add_argument('--all', action='store_true', 
-                       help='Run complete pipeline (emails + analyze + expire check + report)')
+                       help='Run complete pipeline (emails + bulletins + analyze + expire check + report)')
     parser.add_argument('--emails', action='store_true',
-                       help='Process new emails')
+                       help='Process new emails (direct recruiter messages)')
+    parser.add_argument('--bulletins', action='store_true',
+                       help='Process job bulletins (LinkedIn/Indeed/Glassdoor)')
     parser.add_argument('--analyze', action='store_true',
                        help='Run AI analysis on new jobs')
     parser.add_argument('--apply', action='store_true',
@@ -272,7 +316,7 @@ Examples:
     args = parser.parse_args()
     
     # If no flags, show help
-    if not any([args.all, args.emails, args.analyze, args.apply, args.expire, args.report]):
+    if not any([args.all, args.emails, args.bulletins, args.analyze, args.apply, args.expire, args.report]):
         parser.print_help()
         return
     
@@ -287,6 +331,9 @@ Examples:
     # Run selected steps
     if args.all or args.emails:
         results.append(('Email Processing', run_email_processing()))
+    
+    if args.all or args.bulletins:
+        results.append(('Bulletin Processing', run_bulletin_processing()))
     
     if args.all or args.analyze:
         results.append(('AI Analysis', run_ai_analysis()))

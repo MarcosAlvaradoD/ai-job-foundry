@@ -82,7 +82,7 @@ def print_menu():
     print("  4. 📬 Procesar Boletines (LinkedIn/Indeed/Glassdoor)")
     print("  5. 🤖 Análisis AI (calcular FIT SCORES)")
     print("  6. 🚫 Verificar Ofertas Expiradas (por fecha)")
-    print("  7. 🔍 Verificar URLs (scraper automático)")
+    print("  7. 🔍 Verificar URLs (Playwright por plataforma)")
     print("  8. 📊 Generar Reporte")
     
     print(f"\n{COLORS['YELLOW']}SCRAPING:{COLORS['END']}")
@@ -100,7 +100,9 @@ def print_menu():
     print(f"\n{COLORS['BOLD']}UTILIDADES:{COLORS['END']}")
     print("  15. 🔧 Ver Configuración (.env)")
     print("  16. 📚 Ver Documentación")
-    print("  17. 📈 Ver Estado del Proyecto")
+    print("  17. 🎤 Interview Copilot (prep entrevistas)")
+    print("  18. 📩 Actualizar Status desde Emails (entrevistas, rechazos)")
+    print("  19. 🚫 Marcar Jobs Expirados (auto-detect)")
     
     print(f"\n{COLORS['RED']}SALIR:{COLORS['END']}")
     print("  0. 🚪 Salir")
@@ -191,36 +193,47 @@ def handle_option(option: str):
         )
     
     elif option == '7':
-        # Verificar URLs con scraper
-        print(f"\n{COLORS['CYAN']}Opciones de verificación:{COLORS['END']}")
-        print("  a. Todas las ofertas")
-        print("  b. Solo ofertas nuevas (Status=New)")
-        print("  c. Solo high-fit (FIT >= 7)")
-        print("  d. Personalizado (con límite)")
+        # Verificar URLs con SMART VERIFIERS (Playwright por plataforma)
+        print(f"\n{COLORS['CYAN']}Selecciona plataforma:{COLORS['END']}")
+        print("  1. LinkedIn (con login automático)")
+        print("  2. Indeed")
+        print("  3. Glassdoor")
+        print("  4. Todas las plataformas (secuencial)")
         
-        sub_option = input(f"\n{COLORS['BOLD']}Selecciona [a/b/c/d]: {COLORS['END']}").strip().lower()
+        platform = input(f"\n{COLORS['BOLD']}Plataforma [1/2/3/4]: {COLORS['END']}").strip()
         
-        if sub_option == 'a':
+        # Ask for limit
+        limit_input = input(f"{COLORS['BOLD']}¿Cuántos jobs verificar? [Enter=todos]: {COLORS['END']}").strip()
+        limit_arg = ['--limit', limit_input] if limit_input else []
+        
+        if platform == '1':
+            # LinkedIn V3 con cookies
             return run_command(
-                ['py', 'verify_job_status.py', '--all'],
-                'Verificando todas las ofertas'
+                ['py', 'LINKEDIN_SMART_VERIFIER_V3.py'] + limit_arg,
+                'Verificando LinkedIn (con login automático y cookies)'
             )
-        elif sub_option == 'b':
+        elif platform == '2':
+            # Indeed
             return run_command(
-                ['py', 'verify_job_status.py', '--new'],
-                'Verificando ofertas nuevas'
+                ['py', 'INDEED_SMART_VERIFIER.py'] + limit_arg,
+                'Verificando Indeed'
             )
-        elif sub_option == 'c':
+        elif platform == '3':
+            # Glassdoor
             return run_command(
-                ['py', 'verify_job_status.py', '--high-fit'],
-                'Verificando ofertas high-fit'
+                ['py', 'GLASSDOOR_SMART_VERIFIER.py'] + limit_arg,
+                'Verificando Glassdoor'
             )
-        elif sub_option == 'd':
-            limit = input(f"{COLORS['BOLD']}¿Cuántas ofertas verificar? [default: 10]: {COLORS['END']}").strip() or '10'
+        elif platform == '4':
+            # Todas (ejecuta --expire que incluye las 3)
+            print(f"\n{COLORS['YELLOW']}ℹ️  Ejecutando verificación completa (las 3 plataformas){COLORS['END']}")
             return run_command(
-                ['py', 'verify_job_status.py', '--all', '--limit', limit],
-                f'Verificando {limit} ofertas'
+                ['py', 'run_daily_pipeline.py', '--expire'],
+                'Verificando todas las plataformas (LinkedIn V3 + Indeed + Glassdoor)'
             )
+        else:
+            print(f"{COLORS['RED']}❌ Opción inválida{COLORS['END']}")
+            return False
     
     elif option == '8':
         # Generar reporte
@@ -316,9 +329,46 @@ def handle_option(option: str):
         return True
     
     elif option == '17':
-        # Ver Estado del Proyecto
-        show_file('docs/PROJECT_STATUS.md', 'Estado del Proyecto')
-        return True
+        # Interview Copilot
+        print(f"\n{COLORS['CYAN']}🎤 Interview Copilot{COLORS['END']}")
+        print("\nOpciones:")
+        print("  1. Session Recorder (grabar + transcribir)")
+        print("  2. Simple Mode (sin grabar)")
+        print("  3. V2 con Job Context")
+        
+        copilot_option = input(f"\n{COLORS['BOLD']}Selecciona [1/2/3]: {COLORS['END']}").strip()
+        
+        if copilot_option == '1':
+            return run_command(
+                ['py', 'core/copilot/interview_copilot_session_recorder.py'],
+                'Interview Copilot - Session Recorder'
+            )
+        elif copilot_option == '2':
+            return run_command(
+                ['py', 'core/copilot/interview_copilot_simple.py'],
+                'Interview Copilot - Simple Mode'
+            )
+        elif copilot_option == '3':
+            return run_command(
+                ['py', 'core/copilot/interview_copilot_v2.py'],
+                'Interview Copilot V2 - Job Context'
+            )
+        else:
+            print(f"{COLORS['RED']}❌ Opción inválida{COLORS['END']}")
+            return False
+    elif option == '18':
+        # Actualizar status desde emails
+        return run_command(
+            ['py', 'update_status_from_emails.py'],
+            'Actualizando status desde emails (entrevistas, rechazos)'
+        )
+    
+    elif option == '19':
+        # Marcar jobs expirados
+        return run_command(
+            ['py', 'EXPIRE_LIFECYCLE.py', '--mark'],
+            'Marcando jobs expirados (>30 días)'
+        )
     
     elif option == '0':
         # Salir
@@ -339,7 +389,7 @@ def main():
         print_menu()
         
         try:
-            option = input(f"{COLORS['BOLD']}Selecciona una opción [0-17]: {COLORS['END']}").strip()
+            option = input(f"{COLORS['BOLD']}Selecciona una opción [0-19]: {COLORS['END']}").strip()
             
             result = handle_option(option)
             
