@@ -1,0 +1,13 @@
+# Dependencias para Spotify → YouTube Downloader
+# Instalación: pip install -r spotify_youtube_requirements.txt
+
+# OBLIGATORIAS
+yt-dlp>=2023.12.30           # Descarga de videos/audio de YouTube
+ffmpeg-python>=0.2.0         # Conversión de audio (requiere ffmpeg instalado en el sistema)
+
+# OPCIONALES - Spotify
+spotipy>=2.23.0              # API de Spotify (solo si usas playlists de Spotify)
+
+# OPCIONALES - Búsqueda con Playwright (alternativa más robusta)
+playwright>=1.40.0           # Automatización de navegador
+# Después de instalar playwright, ejecutar: playwright install chromium
