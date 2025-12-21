@@ -204,12 +204,41 @@ class SpotifyYouTubeGUI:
             variable=self.no_playlist
         ).pack(anchor=tk.W)
 
-        self.cookies_browser = tk.StringVar(value="none")
-        ttk.Label(advanced_frame, text="Usar cookies del navegador (para videos con restricción):").pack(anchor=tk.W, pady=(10,0))
-        ttk.Radiobutton(advanced_frame, text="Ninguno", variable=self.cookies_browser, value="none").pack(anchor=tk.W, padx=20)
-        ttk.Radiobutton(advanced_frame, text="Chrome", variable=self.cookies_browser, value="chrome").pack(anchor=tk.W, padx=20)
-        ttk.Radiobutton(advanced_frame, text="Firefox", variable=self.cookies_browser, value="firefox").pack(anchor=tk.W, padx=20)
-        ttk.Radiobutton(advanced_frame, text="Edge", variable=self.cookies_browser, value="edge").pack(anchor=tk.W, padx=20)
+        self.use_cookies = tk.BooleanVar(value=False)
+        self.cookies_browser = tk.StringVar(value="edge")
+
+        cookies_check = ttk.Checkbutton(
+            advanced_frame,
+            text="✓ Usar cookies del navegador (para videos con restricción de edad)",
+            variable=self.use_cookies,
+            command=self.toggle_cookies_options
+        )
+        cookies_check.pack(anchor=tk.W, pady=(10,0))
+
+        self.cookies_frame = ttk.Frame(advanced_frame)
+        self.cookies_frame.pack(fill=tk.X, padx=20)
+
+        ttk.Label(self.cookies_frame, text="Navegador:", state='disabled').grid(row=0, column=0, sticky=tk.W, pady=2)
+        self.rb_edge = ttk.Radiobutton(self.cookies_frame, text="Edge (Recomendado)", variable=self.cookies_browser, value="edge", state='disabled')
+        self.rb_edge.grid(row=1, column=0, sticky=tk.W, padx=10)
+        self.rb_firefox = ttk.Radiobutton(self.cookies_frame, text="Firefox", variable=self.cookies_browser, value="firefox", state='disabled')
+        self.rb_firefox.grid(row=2, column=0, sticky=tk.W, padx=10)
+        self.rb_chrome = ttk.Radiobutton(self.cookies_frame, text="Chrome (cierra Chrome primero)", variable=self.cookies_browser, value="chrome", state='disabled')
+        self.rb_chrome.grid(row=3, column=0, sticky=tk.W, padx=10)
+
+        ttk.Label(
+            advanced_frame,
+            text="⚠️ Si Chrome está abierto, usa Edge o Firefox, o cierra Chrome completamente",
+            foreground="orange",
+            font=("Arial", 8)
+        ).pack(anchor=tk.W, pady=(5,0), padx=20)
+
+    def toggle_cookies_options(self):
+        """Activar/desactivar opciones de cookies"""
+        state = 'normal' if self.use_cookies.get() else 'disabled'
+        self.rb_edge.config(state=state)
+        self.rb_firefox.config(state=state)
+        self.rb_chrome.config(state=state)
 
     def log(self, message):
         """Agregar mensaje al log"""
@@ -271,9 +300,11 @@ class SpotifyYouTubeGUI:
             if self.no_playlist.get():
                 ydl_opts['noplaylist'] = True
 
-            # Cookies del navegador
-            if self.cookies_browser.get() != "none":
-                ydl_opts['cookiesfrombrowser'] = (self.cookies_browser.get(),)
+            # Cookies del navegador (solo si está activado)
+            if self.use_cookies.get():
+                browser = self.cookies_browser.get()
+                self.log(f"🍪 Usando cookies de {browser.title()}...")
+                ydl_opts['cookiesfrombrowser'] = (browser,)
 
             # Descargar
             with yt_dlp.YoutubeDL(ydl_opts) as ydl:
