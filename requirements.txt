@@ -47,8 +47,9 @@ email-validator==2.1.0
 # Logging
 loguru==0.7.2
 
-# Database (optional)
-sqlite3-python==1.0.0
+# Database (sqlite3 viene incluido en Python — no requiere instalación)
+# sqlite3-python==1.0.0  ← ELIMINADO: no existe este paquete, sqlite3 es builtin
+psycopg2-binary==2.9.9   # PostgreSQL driver (opcional, para migrar de Google Sheets)
 
 # File handling
 pypdf2==3.0.1
