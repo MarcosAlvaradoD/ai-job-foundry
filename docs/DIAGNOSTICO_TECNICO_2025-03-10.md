@@ -218,10 +218,11 @@ Ver sección completa en: `docs/DOCKER_DB_ACCESS.md`
 - **Instalación:** Ver `docs/OPENSANDBOX_INSTALL.md`
 
 ### Firecrawl
-- **Qué es:** API de web scraping → convierte webs en markdown para LLMs
-- **Precio:** 500 páginas GRATIS, luego $16/mes (Hobby)
-- **Útil para este proyecto:** ⚠️ Limitado — LinkedIn/Glassdoor bloquean scraping externo
-- **Recomendación:** Playwright (ya lo tienes) es más efectivo para job boards
+- **Qué es:** API de web scraping → convierte webs en markdown para LLMs (90k+ ⭐ GitHub)
+- **Precio:** 500 créditos GRATIS (⚠️ son de por vida, NO mensuales), luego $16/mes
+- **LinkedIn/Indeed/Glassdoor:** ❌ BLOQUEADOS — robots.txt + anti-bot activo. Firecrawl mismo lo documenta
+- **SÍ funciona:** Páginas de careers de empresas (Workday, Greenhouse, Lever, BambooHR)
+- **Recomendación:** Para job boards usar Playwright (ya tienes). Para páginas de empresas, Firecrawl es excelente
 
 ---
 
