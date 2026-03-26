@@ -10,12 +10,10 @@ import json
 
 # SCOPES COMPLETOS - Incluye todo lo que necesita el proyecto
 SCOPES = [
-    'https://www.googleapis.com/auth/spreadsheets',      # Google Sheets
-    'https://www.googleapis.com/auth/gmail.readonly',    # Leer emails
-    'https://www.googleapis.com/auth/gmail.modify',      # Modificar labels
-    'https://www.googleapis.com/auth/gmail.labels',      # Crear labels
-    'https://www.googleapis.com/auth/gmail.send',        # Enviar emails (futuro)
-    'https://www.googleapis.com/auth/calendar'           # Calendar (futuro)
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/gmail.labels'
 ]
 
 CREDENTIALS_FILE = 'data/credentials/credentials.json'

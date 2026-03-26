@@ -27,7 +27,7 @@ class DashboardHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             
             # Read dashboard template
-            dashboard_path = Path(__file__).parent / 'dashboard.html'
+            dashboard_path = Path(__file__).parent / 'dashboard_secure.html'
             with open(dashboard_path, 'r', encoding='utf-8') as f:
                 content = f.read()
             

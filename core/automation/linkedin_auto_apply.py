@@ -1,21 +1,37 @@
 """
-LinkedIn Auto-Apply V2 - Complete Implementation
+LinkedIn Auto-Apply V3 - WITH AUTOMATIC LOGIN
 Applies automatically to jobs with FIT SCORE >= 7
-Includes form filling, multi-step handling, and Sheets updates
+NOW INCLUDES: Auto-login from .env credentials + cookie management
 """
 import sys
 from pathlib import Path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from core.sheets.sheet_manager import SheetManager
 from playwright.sync_api import sync_playwright, TimeoutError as PlaywrightTimeout
 import time
 import re
+import json
+import os
 from datetime import datetime
+from dotenv import load_dotenv
 
-class LinkedInAutoApplyV2:
+# Load environment variables
+load_dotenv()
+
+class LinkedInAutoApplyV3:
     def __init__(self):
         self.sheet_manager = SheetManager()
+        self.cookies_file = "data/linkedin_cookies.json"
+        self.browser_data_dir = "data/browser_data"
+        
+        # Load LinkedIn credentials from .env
+        self.linkedin_email = os.getenv('LINKEDIN_EMAIL')
+        self.linkedin_password = os.getenv('LINKEDIN_PASSWORD')
+        
+        if not self.linkedin_email or not self.linkedin_password:
+            print("[WARNING] LinkedIn credentials not found in .env!")
+            print("[INFO] Set LINKEDIN_EMAIL and LINKEDIN_PASSWORD in .env file")
         
         # Candidate data from CV
         self.candidate_data = {
@@ -35,14 +51,165 @@ class LinkedInAutoApplyV2:
             'cover_letter': ''  # Will be generated if needed
         }
         
-        print("[OK] Auto-Apply V2 initialized")
+        print("[OK] Auto-Apply V3 initialized (with auto-login support)")
+    
+    def load_cookies(self, context):
+        """Load saved cookies if they exist"""
+        try:
+            if os.path.exists(self.cookies_file):
+                with open(self.cookies_file, 'r') as f:
+                    cookies = json.load(f)
+                    context.add_cookies(cookies)
+                    print(f"[OK] Loaded {len(cookies)} cookies from {self.cookies_file}")
+                    return True
+            return False
+        except Exception as e:
+            print(f"[WARNING] Could not load cookies: {e}")
+            return False
+    
+    def save_cookies(self, context):
+        """Save current cookies for future use"""
+        try:
+            cookies = context.cookies()
+            os.makedirs(os.path.dirname(self.cookies_file), exist_ok=True)
+            with open(self.cookies_file, 'w') as f:
+                json.dump(cookies, f)
+            print(f"[OK] Saved {len(cookies)} cookies to {self.cookies_file}")
+            return True
+        except Exception as e:
+            print(f"[ERROR] Could not save cookies: {e}")
+            return False
+    
+    def is_logged_in(self, page):
+        """Check if we're logged into LinkedIn"""
+        try:
+            page.goto('https://www.linkedin.com/feed/', timeout=15000)
+            time.sleep(2)
+            
+            # Check if we're on the feed page (logged in)
+            if '/feed' in page.url:
+                print("[OK] Already logged into LinkedIn!")
+                return True
+            
+            # Check if we're redirected to login
+            if '/login' in page.url or '/checkpoint' in page.url:
+                print("[INFO] Not logged in - will attempt auto-login")
+                return False
+            
+            return False
+        except Exception as e:
+            print(f"[WARNING] Could not verify login status: {e}")
+            return False
+    
+    def login_to_linkedin(self, page):
+        """Perform automatic login to LinkedIn"""
+        try:
+            if not self.linkedin_email or not self.linkedin_password:
+                print("[ERROR] LinkedIn credentials not configured in .env")
+                return False
+            
+            print("\n[LOGIN] Starting automatic LinkedIn login...")
+            print(f"[INFO] Email: {self.linkedin_email}")
+            
+            # Go to login page
+            page.goto('https://www.linkedin.com/login', timeout=30000)
+            time.sleep(2)
+            
+            # Fill email
+            email_input = page.query_selector('#username')
+            if not email_input:
+                print("[ERROR] Email input field not found")
+                return False
+            
+            email_input.fill(self.linkedin_email)
+            time.sleep(0.5)
+            print("[OK] Email entered")
+            
+            # Fill password
+            password_input = page.query_selector('#password')
+            if not password_input:
+                print("[ERROR] Password input field not found")
+                return False
+            
+            password_input.fill(self.linkedin_password)
+            time.sleep(0.5)
+            print("[OK] Password entered")
+            
+            # Click login button
+            login_button = page.query_selector('button[type="submit"]')
+            if not login_button:
+                print("[ERROR] Login button not found")
+                return False
+            
+            login_button.click()
+            print("[CLICK] Login button pressed")
+            
+            # Wait for navigation
+            time.sleep(5)
+            
+            # Check for verification challenges
+            if '/checkpoint' in page.url or '/challenge' in page.url:
+                print("\n" + "="*70)
+                print("[SECURITY] LinkedIn requires verification!")
+                print("[ACTION] Please complete the security check manually in the browser")
+                print("[INFO] Script will wait 60 seconds for you to complete verification...")
+                print("="*70 + "\n")
+                
+                # Wait for manual verification
+                start_time = time.time()
+                while time.time() - start_time < 60:
+                    time.sleep(3)
+                    if '/feed' in page.url:
+                        print("[SUCCESS] Verification completed!")
+                        return True
+                
+                if '/feed' not in page.url:
+                    print("[ERROR] Verification timeout - please try again")
+                    return False
+            
+            # Verify successful login
+            if '/feed' in page.url:
+                print("[SUCCESS] Login successful!")
+                return True
+            else:
+                print(f"[ERROR] Login failed - unexpected URL: {page.url}")
+                return False
+                
+        except Exception as e:
+            print(f"[ERROR] Login failed: {e}")
+            return False
+    
+    def ensure_linkedin_session(self, context, page):
+        """Ensure we have a valid LinkedIn session"""
+        print("\n[SESSION] Checking LinkedIn session...")
+        
+        # Try loading saved cookies first
+        cookies_loaded = self.load_cookies(context)
+        
+        # Check if logged in
+        if self.is_logged_in(page):
+            print("[OK] Valid session active")
+            # Save cookies for next time if we just logged in
+            if not cookies_loaded:
+                self.save_cookies(context)
+            return True
+        
+        # Not logged in - attempt auto-login
+        if self.login_to_linkedin(page):
+            # Save cookies after successful login
+            self.save_cookies(context)
+            return True
+        
+        print("[ERROR] Could not establish LinkedIn session")
+        return False
     
     def get_high_fit_jobs(self, min_score=7):
-        """Get jobs with FIT SCORE >= min_score"""
-        print(f"[SEARCH] Finding jobs with FIT >= {min_score}...")
+        """Get jobs with FIT SCORE >= min_score and ONLY LinkedIn URLs"""
+        print(f"\n[SEARCH] Finding LinkedIn jobs with FIT >= {min_score}...")
         
         all_jobs = self.sheet_manager.get_all_jobs(tab="registry")
         high_fit = []
+        skipped_external = 0
         
         for job in all_jobs:
             try:
@@ -50,13 +217,23 @@ class LinkedInAutoApplyV2:
                 status = job.get('Status', '').lower()
                 apply_url = job.get('ApplyURL', '')
                 
-                # Only jobs with high FIT, not applied, and have URL
-                if fit_score >= min_score and 'applied' not in status and apply_url:
-                    high_fit.append(job)
+                # Skip if already applied
+                if 'applied' in status:
+                    continue
+                
+                # Only jobs with high FIT and valid URL
+                if fit_score >= min_score and apply_url:
+                    # ✅ CRITICAL: Only LinkedIn URLs with Easy Apply
+                    if 'linkedin.com/jobs' in apply_url:
+                        high_fit.append(job)
+                    else:
+                        skipped_external += 1
             except:
                 continue
         
-        print(f"[FOUND] {len(high_fit)} jobs ready for auto-apply")
+        print(f"[FOUND] {len(high_fit)} LinkedIn jobs ready for auto-apply")
+        if skipped_external > 0:
+            print(f"[SKIP] {skipped_external} external jobs (not LinkedIn Easy Apply)")
         return high_fit
     
     def detect_field_type(self, input_element):
@@ -212,8 +389,8 @@ class LinkedInAutoApplyV2:
         except:
             return None
     
-    def apply_to_job(self, job, browser, dry_run=False):
-        """Apply to a single job"""
+    def apply_to_job(self, job, page, dry_run=False):
+        """Apply to a single job (using existing page with session)"""
         company = job.get('Company', 'Unknown')
         role = job.get('Role', 'Unknown')
         apply_url = job.get('ApplyURL', '')
@@ -230,9 +407,7 @@ class LinkedInAutoApplyV2:
             print("[SKIP] No apply URL")
             return False, "No URL"
         
-        page = None
         try:
-            page = browser.new_page()
             page.goto(apply_url, timeout=30000)
             
             # Wait for page load
@@ -243,14 +418,12 @@ class LinkedInAutoApplyV2:
             
             if not easy_apply_button:
                 print("[SKIP] Not an Easy Apply job")
-                page.close()
                 return False, "Not Easy Apply"
             
             print("[FOUND] Easy Apply button!")
             
             if dry_run:
                 print("[DRY-RUN] Would click Easy Apply and fill form")
-                page.close()
                 return True, "Dry-run success"
             
             # Click Easy Apply
@@ -261,7 +434,6 @@ class LinkedInAutoApplyV2:
             modal = page.query_selector('[role="dialog"]')
             if not modal:
                 print("[ERROR] Application modal not found")
-                page.close()
                 return False, "Modal not found"
             
             print("[OK] Application modal opened")
@@ -298,28 +470,19 @@ class LinkedInAutoApplyV2:
                     # time.sleep(2)
                     # print("[SUCCESS] Application submitted!")
                     
-                    page.close()
                     return True, "Form filled (review needed)"
                 
                 # No next/submit found
                 print("[WARNING] No Next or Submit button found")
                 break
             
-            page.close()
             return False, "Form incomplete"
                 
         except PlaywrightTimeout:
             print(f"[ERROR] Page load timeout")
-            if page:
-                page.close()
             return False, "Timeout"
         except Exception as e:
             print(f"[ERROR] {e}")
-            if page:
-                try:
-                    page.close()
-                except:
-                    pass
             return False, str(e)
     
     def update_job_status(self, job, status, notes=""):
@@ -358,7 +521,7 @@ class LinkedInAutoApplyV2:
     
     def run(self, dry_run=True, max_applies=5, min_score=7):
         """
-        Run auto-apply process
+        Run auto-apply process with automatic login
         
         Args:
             dry_run: If True, only simulates without submitting
@@ -366,7 +529,7 @@ class LinkedInAutoApplyV2:
             min_score: Minimum FIT score to apply
         """
         print("\n" + "="*70)
-        print("[AUTO-APPLY V2] LinkedIn Easy Apply with Form Filling")
+        print("[AUTO-APPLY V3] LinkedIn Easy Apply with AUTO-LOGIN")
         print(f"[CONFIG] Dry-run: {dry_run} | Max applies: {max_applies} | Min FIT: {min_score}")
         print("="*70 + "\n")
         
@@ -391,8 +554,27 @@ class LinkedInAutoApplyV2:
         with sync_playwright() as p:
             browser = p.chromium.launch(
                 headless=False,  # Show browser for monitoring
-                user_data_dir="data/browser_data"  # Use saved session
+                args=[
+                    '--disable-blink-features=AutomationControlled',
+                    '--disable-dev-shm-usage'
+                ]
             )
+            
+            context = browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            
+            page = context.new_page()
+            
+            # Ensure we have a valid LinkedIn session
+            if not self.ensure_linkedin_session(context, page):
+                print("\n[ERROR] Could not establish LinkedIn session!")
+                print("[ACTION] Please check your credentials in .env file")
+                browser.close()
+                return
+            
+            print("\n[OK] LinkedIn session established - starting applications...\n")
             
             results = {
                 'success': 0,
@@ -401,7 +583,7 @@ class LinkedInAutoApplyV2:
             }
             
             for job in jobs[:max_applies]:
-                success, reason = self.apply_to_job(job, browser, dry_run=dry_run)
+                success, reason = self.apply_to_job(job, page, dry_run=dry_run)
                 
                 if success:
                     results['success'] += 1
@@ -415,6 +597,10 @@ class LinkedInAutoApplyV2:
                 # Delay between applications
                 time.sleep(5)
             
+            # Keep browser open for manual review
+            print("\n[PAUSE] Browser will stay open for 10 seconds for review...")
+            time.sleep(10)
+            
             browser.close()
         
         # Summary
@@ -427,7 +613,7 @@ class LinkedInAutoApplyV2:
 
 
 if __name__ == "__main__":
-    auto_apply = LinkedInAutoApplyV2()
+    auto_apply = LinkedInAutoApplyV3()
     
     # DRY RUN by default (safe testing)
     auto_apply.run(dry_run=True, max_applies=3, min_score=7)

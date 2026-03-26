@@ -16,6 +16,22 @@ import subprocess
 import webbrowser
 from datetime import datetime
 
+# Import OAuth validator
+from core.utils.oauth_validator import ensure_valid_oauth_token
+
+# Import centralized paths
+try:
+    from paths import get_startup_check_script, SCRIPTS_POWERSHELL
+except ImportError:
+    # Fallback if paths.py doesn't exist
+    SCRIPTS_POWERSHELL = Path(__file__).parent / "scripts" / "powershell"
+    def get_startup_check_script():
+        for script in ["startup_check_v3.ps1", "startup_check_v2.ps1", "startup_check.ps1"]:
+            script_path = SCRIPTS_POWERSHELL / script
+            if script_path.exists():
+                return script_path
+        return None
+
 # Color support for Windows
 try:
     import colorama
@@ -38,10 +54,20 @@ def run_startup_check():
     """Run startup checks before showing menu"""
     print(f"{COLORS['CYAN']}Ejecutando verificación de servicios...{COLORS['END']}\n")
     
+    # Get startup check script using paths.py
+    startup_script = get_startup_check_script()
+    
+    if not startup_script:
+        print(f"{COLORS['YELLOW']}⚠️  No se encontró script de startup check - continuando sin verificar{COLORS['END']}")
+        input(f"\n{COLORS['BOLD']}Presiona Enter para continuar...{COLORS['END']}")
+        return
+    
+    print(f"{COLORS['CYAN']}Usando: {startup_script}{COLORS['END']}\n")
+    
     # Run PowerShell startup check
     try:
         result = subprocess.run(
-            ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-File', 'startup_check_v2.ps1'],
+            ['powershell.exe', '-ExecutionPolicy', 'Bypass', '-File', str(startup_script)],
             capture_output=False
         )
         
@@ -56,7 +82,7 @@ def run_startup_check():
         input(f"\n{COLORS['BOLD']}Presiona Enter para continuar al menú...{COLORS['END']}")
         
     except FileNotFoundError:
-        print(f"{COLORS['YELLOW']}⚠️  startup_check_v2.ps1 no encontrado - continuando sin verificar{COLORS['END']}")
+        print(f"{COLORS['YELLOW']}⚠️  Script no encontrado: {startup_script}{COLORS['END']}")
     except Exception as e:
         print(f"{COLORS['RED']}❌ Error ejecutando startup check: {e}{COLORS['END']}")
 
@@ -90,7 +116,7 @@ def print_menu():
     print("  10. 🔗 Indeed Scraper (buscar ofertas)")
     
     print(f"\n{COLORS['BLUE']}AUTO-APPLY:{COLORS['END']}")
-    print("  11. 🎯 Auto-Apply (DRY RUN - no aplica real)")
+    print("  11. 🎯 Auto-Apply (DRY RUN - simulación)")
     print("  12. 💼 Auto-Apply (LIVE - aplica realmente)")
     
     print(f"\n{COLORS['HEADER']}VISUALIZACIÓN:{COLORS['END']}")
@@ -103,6 +129,7 @@ def print_menu():
     print("  17. 🎤 Interview Copilot (prep entrevistas)")
     print("  18. 📩 Actualizar Status desde Emails (entrevistas, rechazos)")
     print("  19. 🚫 Marcar Jobs Expirados (auto-detect)")
+    print("  20. 🔐 Regenerar Credenciales OAuth (Gmail/Sheets)")
     
     print(f"\n{COLORS['RED']}SALIR:{COLORS['END']}")
     print("  0. 🚪 Salir")
@@ -209,19 +236,19 @@ def handle_option(option: str):
         if platform == '1':
             # LinkedIn V3 con cookies
             return run_command(
-                ['py', 'LINKEDIN_SMART_VERIFIER_V3.py'] + limit_arg,
+                ['py', 'scripts/verifiers/LINKEDIN_SMART_VERIFIER_V3.py'] + limit_arg,
                 'Verificando LinkedIn (con login automático y cookies)'
             )
         elif platform == '2':
             # Indeed
             return run_command(
-                ['py', 'INDEED_SMART_VERIFIER.py'] + limit_arg,
+                ['py', 'scripts/verifiers/INDEED_SMART_VERIFIER.py'] + limit_arg,
                 'Verificando Indeed'
             )
         elif platform == '3':
             # Glassdoor
             return run_command(
-                ['py', 'GLASSDOOR_SMART_VERIFIER.py'] + limit_arg,
+                ['py', 'scripts/verifiers/GLASSDOOR_SMART_VERIFIER.py'] + limit_arg,
                 'Verificando Glassdoor'
             )
         elif platform == '4':
@@ -243,11 +270,40 @@ def handle_option(option: str):
         )
     
     elif option == '9':
-        # LinkedIn Scraper
-        print(f"\n{COLORS['YELLOW']}LinkedIn Scraper requiere configuración manual.{COLORS['END']}")
-        print(f"Ver: core/ingestion/linkedin_scraper_V2.py")
-        print(f"O usar: py scripts/visual_test.py")
-        return False
+        # LinkedIn Notifications Scraper (NUEVO)
+        print(f"\n{COLORS['CYAN']}🔍 LinkedIn Notifications Scraper{COLORS['END']}")
+        print(f"Extrae ofertas de recomendaciones de LinkedIn")
+        print(f"\nOpciones:")
+        print(f"  1. Solo scraping (extrae y guarda)")
+        print(f"  2. Workflow completo DRY RUN (scrape + analyze + test apply)")
+        print(f"  3. Workflow completo LIVE (scrape + analyze + REAL apply)")
+        
+        choice = input(f"\n{COLORS['BOLD']}Selecciona [1/2/3]: {COLORS['END']}").strip()
+        
+        if choice == '1':
+            return run_command(
+                ['py', 'run_linkedin_workflow.py', '--scrape-only'],
+                '🔍 LinkedIn Notifications Scraper (solo extracción)'
+            )
+        elif choice == '2':
+            return run_command(
+                ['py', 'run_linkedin_workflow.py', '--all'],
+                '🚀 LinkedIn Workflow Completo (DRY RUN)'
+            )
+        elif choice == '3':
+            print(f"\n{COLORS['RED']}⚠️  MODO LIVE - Aplicará a ofertas reales{COLORS['END']}")
+            confirm = input(f"{COLORS['BOLD']}¿Estás seguro? (escribe 'SÍ' o 'SI' o 'S' para confirmar): {COLORS['END']}").strip().upper()
+            if confirm in ['SÍ', 'SI', 'S', 'YES', 'Y']:
+                return run_command(
+                    ['py', 'run_linkedin_workflow.py', '--all', '--live'],
+                    '🚀 LinkedIn Workflow Completo (LIVE)'
+                )
+            else:
+                print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
+                return False
+        else:
+            print(f"{COLORS['RED']}❌ Opción inválida{COLORS['END']}")
+            return False
     
     elif option == '10':
         # Indeed Scraper
@@ -256,20 +312,44 @@ def handle_option(option: str):
         return False
     
     elif option == '11':
-        # Auto-Apply DRY RUN
+        # Auto-Apply DRY RUN (EASY APPLY COMPLETE)
+        print(f"\n{COLORS['CYAN']}🤖 Auto-Apply EASY APPLY (DRY RUN){COLORS['END']}")
+        print(f"Sistema: Playwright + Detección Inteligente Easy Apply")
+        print(f"Detecta: Easy Apply vs External Apply\n")
+        
+        # Ask for parameters
+        min_fit = input(f"{COLORS['BOLD']}FIT Score mínimo [default=7]: {COLORS['END']}").strip()
+        min_fit = min_fit if min_fit else '7'
+        
+        max_jobs = input(f"{COLORS['BOLD']}Máximo de jobs a procesar [default=5]: {COLORS['END']}").strip()
+        max_jobs = max_jobs if max_jobs else '5'
+        
         return run_command(
-            ['py', 'run_daily_pipeline.py', '--apply', '--dry-run'],
-            'Auto-Apply (DRY RUN - sin aplicar realmente)'
+            ['py', 'core/automation/auto_apply_linkedin_easy_complete.py', 
+             '--min-fit', min_fit, '--max-jobs', max_jobs],
+            f'Easy Apply (DRY RUN - FIT>={min_fit}, max={max_jobs})'
         )
     
     elif option == '12':
-        # Auto-Apply LIVE
+        # Auto-Apply LIVE (EASY APPLY COMPLETE)
         print(f"\n{COLORS['RED']}⚠️  MODO LIVE - Aplicará a ofertas reales{COLORS['END']}")
-        confirm = input(f"{COLORS['BOLD']}¿Estás seguro? (escribe 'SÍ' para confirmar): {COLORS['END']}").strip()
-        if confirm == 'SÍ':
+        print(f"Sistema: Playwright + Detección Inteligente Easy Apply")
+        print(f"Detecta: Easy Apply vs External Apply\n")
+        
+        # Ask for parameters
+        min_fit = input(f"{COLORS['BOLD']}FIT Score mínimo [default=7]: {COLORS['END']}").strip()
+        min_fit = min_fit if min_fit else '7'
+        
+        max_jobs = input(f"{COLORS['BOLD']}Máximo de jobs a procesar [default=5]: {COLORS['END']}").strip()
+        max_jobs = max_jobs if max_jobs else '5'
+        
+        confirm = input(f"\n{COLORS['RED']}{COLORS['BOLD']}¿Aplicar REALMENTE a hasta {max_jobs} ofertas? (escribe 'SÍ' o 'SI' o 'S'): {COLORS['END']}").strip().upper()
+        
+        if confirm in ['SÍ', 'SI', 'S', 'YES', 'Y']:
             return run_command(
-                ['py', 'run_daily_pipeline.py', '--apply'],
-                'Auto-Apply (LIVE - aplicando realmente)'
+                ['py', 'core/automation/auto_apply_linkedin_easy_complete.py', 
+                 '--live', '--min-fit', min_fit, '--max-jobs', max_jobs],
+                f'Easy Apply (LIVE - FIT>={min_fit}, max={max_jobs})'
             )
         else:
             print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
@@ -366,9 +446,30 @@ def handle_option(option: str):
     elif option == '19':
         # Marcar jobs expirados
         return run_command(
-            ['py', 'EXPIRE_LIFECYCLE.py', '--mark'],
+            ['py', 'scripts/verifiers/EXPIRE_LIFECYCLE.py', '--mark'],
             'Marcando jobs expirados (>30 días)'
         )
+    
+    elif option == '20':
+        # Regenerar credenciales OAuth
+        print(f"\n{COLORS['YELLOW']}🔐 REGENERAR CREDENCIALES OAUTH{COLORS['END']}")
+        print(f"\n{COLORS['CYAN']}Permisos que se solicitarán:{COLORS['END']}")
+        print(f"  • Google Sheets - Lectura/escritura")
+        print(f"  • Gmail - Lectura de emails")
+        print(f"  • Gmail - Modificar etiquetas")
+        print(f"  • Gmail - Mover a papelera")
+        print(f"\n{COLORS['YELLOW']}NOTA: Esto eliminará tu token.json actual y te pedirá login de nuevo{COLORS['END']}")
+        
+        confirm = input(f"\n{COLORS['BOLD']}¿Regenerar credenciales? (escribe 'SI' o 'S'): {COLORS['END']}").strip().upper()
+        
+        if confirm in ['SI', 'S', 'YES', 'Y']:
+            return run_command(
+                ['py', 'scripts/oauth/regenerate_oauth_token.py'],
+                'Regenerando credenciales OAuth'
+            )
+        else:
+            print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
+            return False
     
     elif option == '0':
         # Salir
@@ -384,12 +485,20 @@ def main():
     # Run startup check first
     run_startup_check()
     
+    # ✅ CRITICAL: Validate OAuth token BEFORE any operations
+    print(f"\n{COLORS['CYAN']}🔐 Validating OAuth token...{COLORS['END']}")
+    if not ensure_valid_oauth_token(auto_refresh=True):
+        print(f"{COLORS['RED']}❌ OAuth token validation FAILED{COLORS['END']}")
+        print(f"{COLORS['YELLOW']}Manual fix: py scripts\\oauth\\reauthenticate_gmail_v2.py{COLORS['END']}\n")
+        sys.exit(1)
+    print(f"{COLORS['GREEN']}✅ OAuth token validated{COLORS['END']}\n")
+    
     while True:
         print_header()
         print_menu()
         
         try:
-            option = input(f"{COLORS['BOLD']}Selecciona una opción [0-19]: {COLORS['END']}").strip()
+            option = input(f"{COLORS['BOLD']}Selecciona una opción [0-20]: {COLORS['END']}").strip()
             
             result = handle_option(option)
             

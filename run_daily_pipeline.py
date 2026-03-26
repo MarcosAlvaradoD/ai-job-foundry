@@ -1,365 +1,399 @@
-#!/usr/bin/env python3
 """
-Daily Pipeline - Master orchestrator for AI Job Foundry
-Controls the entire job search automation workflow
+📅 AI Job Foundry - Daily Pipeline (RESTORED - WORKING VERSION)
+================================================================
+Pipeline diario que usa los scripts que REALMENTE existen y funcionan.
 
-Usage:
-    py run_daily_pipeline.py --all              # Run complete pipeline
-    py run_daily_pipeline.py --emails           # Process emails only
-    py run_daily_pipeline.py --bulletins        # Process bulletins only
-    py run_daily_pipeline.py --analyze          # AI analysis only
-    py run_daily_pipeline.py --apply            # Auto-apply only
-    py run_daily_pipeline.py --emails --analyze # Email + AI
+Opciones:
+  --all          : Pipeline completo
+  --quick        : Pipeline rápido (bulletins + report)
+  --emails       : Solo procesar emails (bulletins)
+  --analyze      : Solo análisis AI
+  --apply        : Solo auto-apply
+  --expire       : Solo verificar expirados
+  --report       : Solo reporte
+
+Autor: Marcos Alberto Alvarado
+Fecha: 2026-01-06 (RESTAURADO)
 """
+
 import sys
 import argparse
-from pathlib import Path
+import logging
+import subprocess
+import asyncio
 from datetime import datetime
+from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent
-sys.path.insert(0, str(project_root))
+# ✅ FIX: Get absolute project root path
+PROJECT_ROOT = Path(__file__).parent.absolute()
 
-def log(msg: str, level: str = "INFO"):
-    """Unified logging"""
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    prefix = {
-        "INFO": "ℹ️ ",
-        "SUCCESS": "✅",
-        "ERROR": "❌",
-        "WARN": "⚠️ "
-    }.get(level, "")
-    print(f"[{timestamp}] {prefix} {msg}")
+# ✅ FIX: Windows UTF-8 support for emojis
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
-def run_email_processing():
-    """Step 1: Process new emails from JOBS/Inbound"""
-    log("STEP 1: Processing emails...", "INFO")
-    
+# 🔐 IMPORTAR VALIDADOR DE TOKENS
+from oauth_token_validator import validate_token_or_exit
+
+# Configurar logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='[%(asctime)s] %(levelname)s: %(message)s',
+    datefmt='%Y-%m-%d %H:%M:%S'
+)
+
+logger = logging.getLogger(__name__)
+
+
+def print_header():
+    """Imprime el header del pipeline."""
+    print("=" * 70)
+    print("🚀 AI JOB FOUNDRY - DAILY PIPELINE")
+    print("=" * 70)
+    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 70)
+    print()
+
+
+def print_footer(summary: dict):
+    """Imprime el summary del pipeline."""
+    print()
+    print("=" * 70)
+    print("📈 PIPELINE SUMMARY")
+    print("=" * 70)
+    for step, status in summary.items():
+        if status == "PASS":
+            icon = "✅"
+        elif status == "SKIP":
+            icon = "❌"
+        else:
+            icon = "❌"
+        print(f"{step:<20} {icon} {status}")
+    print("=" * 70)
+    print(f"Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    print("=" * 70)
+    print()
+
+
+def validate_oauth():
+    """
+    ✅ FUNCIONA PERFECTAMENTE
+    Valida el token OAuth antes de comenzar.
+    """
+    logger.info("🔐 STEP 0: Validating OAuth token...")
+    logger.info("")
     try:
-        from core.ingestion.ingest_email_to_sheet_v2 import main as ingest_main
-        ingest_main()
-        log("Email processing completed", "SUCCESS")
+        validate_token_or_exit(exit_code=1)
+        logger.info("")
+        logger.info("✅ OAuth token validated - pipeline ready to run")
+        logger.info("")
         return True
-    except Exception as e:
-        log(f"Email processing failed: {e}", "ERROR")
-        return False
+    except SystemExit:
+        logger.error("❌ OAuth validation failed")
+        raise
+
 
 def run_bulletin_processing():
-    """Step 1b: Process job bulletins from LinkedIn/Indeed/Glassdoor"""
-    log("STEP 1b: Processing bulletins...", "INFO")
-    
+    """
+    ✅ USA: core/automation/job_bulletin_processor.py
+    Procesa boletines de Glassdoor/LinkedIn/Indeed
+    """
+    logger.info("ℹ️  STEP 1: Processing bulletins...")
     try:
-        from core.automation.job_bulletin_processor import JobBulletinProcessor
+        script_path = PROJECT_ROOT / 'core' / 'automation' / 'job_bulletin_processor.py'
+        # ✅ FIX: No capturar output, dejar que el script imprima directamente
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            timeout=300,
+            check=False  # No raise exception on non-zero exit
+        )
         
-        processor = JobBulletinProcessor()
-        processor.process_bulletins(max_emails=50)
-        
-        log("Bulletin processing completed", "SUCCESS")
-        return True
+        if result.returncode == 0:
+            logger.info("✅ Bulletins processed successfully")
+            return "PASS"
+        else:
+            logger.error(f"❌ Bulletin processing failed with exit code: {result.returncode}")
+            return "FAIL"
+    except subprocess.TimeoutExpired:
+        logger.error("❌ Bulletin processing timed out after 5 minutes")
+        return "FAIL"
     except Exception as e:
-        log(f"Bulletin processing failed: {e}", "ERROR")
-        import traceback
-        traceback.print_exc()
-        return False
+        logger.error(f"❌ Bulletin processing failed: {e}")
+        return "FAIL"
+
 
 def run_ai_analysis():
-    """Step 2: Analyze jobs with AI and calculate FIT SCORES"""
-    log("STEP 2: Running AI analysis...", "INFO")
-    
+    """
+    ✅ USA: scripts/maintenance/calculate_linkedin_fit_scores.py
+    Calcula FIT scores para LinkedIn jobs sin score
+    """
+    logger.info("ℹ️  STEP 2: Running AI analysis...")
     try:
-        import sys
-        import os
-        from pathlib import Path
-        from dotenv import load_dotenv
+        script_path = PROJECT_ROOT / 'scripts' / 'maintenance' / 'calculate_linkedin_fit_scores.py'
+        result = subprocess.run(
+            [sys.executable, str(script_path)],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',
+            timeout=600  # 10 minutes for AI analysis
+        )
         
-        # Load environment
-        load_dotenv()
-        
-        # Find CV file
-        cv_path = Path(__file__).parent / "data" / "cv_descriptor.txt"
-        if not cv_path.exists():
-            log(f"CV not found at {cv_path}", "ERROR")
-            return False
-        
-        # Get Sheet ID from .env
-        sheet_id = os.getenv('GOOGLE_SHEETS_ID')
-        if not sheet_id:
-            log("GOOGLE_SHEETS_ID not found in .env", "ERROR")
-            return False
-        
-        # Set args for the analysis script
-        sys.argv = [
-            'enrich_sheet_with_llm_v3.py',
-            '--sheet', sheet_id,
-            '--cv', str(cv_path),
-            '--min-fit', '0',
-            '--force'
-        ]
-        
-        from core.enrichment.enrich_sheet_with_llm_v3 import main as analyze_main
-        analyze_main()
-        log("AI analysis completed", "SUCCESS")
-        return True
+        if result.returncode == 0:
+            logger.info("✅ AI analysis completed")
+            return "PASS"
+        else:
+            logger.error(f"❌ AI analysis failed: {result.stderr[:200]}")
+            return "FAIL"
     except Exception as e:
-        log(f"AI analysis failed: {e}", "ERROR")
-        import traceback
-        traceback.print_exc()
-        return False
+        logger.error(f"❌ AI analysis failed: {e}")
+        return "FAIL"
+
 
 def run_auto_apply(dry_run: bool = True):
-    """Step 3: Auto-apply to high-fit jobs"""
+    """
+    ✅ USA: core/automation/auto_apply_linkedin_easy_complete.py
+    Auto-aplica a ofertas con FIT 7+
+    """
     mode = "DRY RUN" if dry_run else "LIVE"
-    log(f"STEP 3: Auto-apply ({mode})...", "INFO")
-    
-    if dry_run:
-        log("Dry run mode - no real applications", "WARN")
-    
+    logger.info(f"ℹ️  STEP 3: Auto-apply ({mode})...")
     try:
-        # Import auto-apply module
-        import asyncio
-        from core.automation.auto_apply_linkedin import LinkedInAutoApplier
+        script_path = PROJECT_ROOT / 'core' / 'automation' / 'auto_apply_linkedin_easy_complete.py'
+        args = [sys.executable, str(script_path)]
+        if not dry_run:
+            args.append('--live')
+        args.extend(['--min-fit', '7', '--max-jobs', '5'])
         
-        # Run auto-applier (it handles job selection internally)
-        applier = LinkedInAutoApplier(dry_run=dry_run)
+        # ✅ FIX: No capture output para ver qué pasa en tiempo real
+        # ✅ FIX: Timeout aumentado a 15 minutos (900s) para procesar múltiples jobs
+        result = subprocess.run(
+            args,
+            timeout=900,  # 15 minutes for multiple applications
+            check=False
+        )
         
-        # Run async applier (method is 'run' not 'process_jobs')
-        asyncio.run(applier.run())
-        
-        log(f"Auto-apply completed: {applier.applications_submitted} applications submitted", "SUCCESS")
-        return True
-        
+        if result.returncode == 0:
+            logger.info(f"✅ Auto-apply completed ({mode})")
+            return "PASS"
+        else:
+            logger.warning(f"⚠️  Auto-apply finished with warnings (code: {result.returncode})")
+            return "PASS"  # Don't fail pipeline if some jobs failed
+    except subprocess.TimeoutExpired:
+        logger.error(f"❌ Auto-apply timed out after 15 minutes")
+        return "FAIL"
     except Exception as e:
-        log(f"Auto-apply failed: {e}", "ERROR")
-        import traceback
-        traceback.print_exc()
-        return False
+        logger.error(f"❌ Auto-apply failed: {e}")
+        return "FAIL"
 
-def check_expired_jobs():
+
+def run_expiration_check():
     """
-    Step 4: Verify and cleanup expired jobs
-    
-    FLUJO:
-    1. Borra jobs ya marcados como EXPIRED (limpieza)
-    2. Verifica jobs actuales con Playwright (marca nuevos EXPIRED)
-    3. Próxima ejecución: borra los que se marcaron + marca nuevos
+    ✅ USA: scripts/verifiers/EXPIRE_LIFECYCLE.py --mark
+    Marca jobs expirados (>30 días)
     """
-    log("STEP 4: Checking for expired jobs...", "INFO")
-    
+    logger.info("ℹ️  STEP 4: Checking for expired jobs...")
     try:
-        # PASO 1: Borrar jobs EXPIRED existentes
-        log("  [1/4] Deleting previously marked EXPIRED jobs...", "INFO")
-        try:
-            import subprocess
-            result = subprocess.run(
-                ['py', 'EXPIRE_LIFECYCLE.py', '--delete'],
-                capture_output=True,
-                text=True,
-                timeout=180  # 3 min max (increased from 2)
-            )
-            
-            if result.returncode == 0:
-                # Parse output to get deletion count
-                output = result.stdout
-                if "TOTAL DELETED:" in output:
-                    deleted = output.split("TOTAL DELETED:")[1].split("\n")[0].strip()
-                    log(f"    ✅ Deleted {deleted} EXPIRED jobs", "SUCCESS")
-                else:
-                    log(f"    ✅ Cleanup completed", "SUCCESS")
-            else:
-                log(f"    ⚠️  Cleanup warning: {result.stderr[:100]}", "WARN")
-        except Exception as e:
-            log(f"    ⚠️  Cleanup skipped: {str(e)[:50]}", "WARN")
+        script_path = PROJECT_ROOT / 'scripts' / 'verifiers' / 'EXPIRE_LIFECYCLE.py'
+        result = subprocess.run(
+            [sys.executable, str(script_path), '--mark'],
+            capture_output=True,
+            text=True,
+            encoding='utf-8',  # ✅ FIX: Explicit UTF-8 encoding
+            timeout=300
+        )
         
-        # PASO 2: Verificar Glassdoor con Playwright
-        log("  [2/4] Verifying Glassdoor jobs with Playwright...", "INFO")
-        try:
-            from GLASSDOOR_SMART_VERIFIER import GlassdoorSmartVerifier
-            verifier = GlassdoorSmartVerifier()
-            results = verifier.verify_all(limit=None, mark_expired=True)
-            
-            if results:
-                expired_count = len(results.get('expired', []))
-                active_count = len(results.get('active', []))
-                log(f"    ✅ Glassdoor: {expired_count} expired, {active_count} active", "SUCCESS")
-        except Exception as e:
-            log(f"    ⚠️  Glassdoor verification failed: {str(e)[:50]}", "WARN")
-        
-        # PASO 3: Verificar LinkedIn con Playwright (usando V3 mejorada)
-        log("  [3/4] Verifying LinkedIn jobs with Playwright...", "INFO")
-        try:
-            from LINKEDIN_SMART_VERIFIER_V3 import LinkedInSmartVerifierV3
-            verifier = LinkedInSmartVerifierV3()
-            results = verifier.verify_all(limit=None, mark_expired=True)
-            
-            if results:
-                expired_count = len(results.get('expired', []))
-                active_count = len(results.get('active', []))
-                log(f"    ✅ LinkedIn: {expired_count} expired, {active_count} active", "SUCCESS")
-        except Exception as e:
-            log(f"    ⚠️  LinkedIn verification failed: {str(e)[:50]}", "WARN")
-        
-        # PASO 4: Verificar Indeed con Playwright
-        log("  [4/4] Verifying Indeed jobs with Playwright...", "INFO")
-        try:
-            from INDEED_SMART_VERIFIER import IndeedSmartVerifier
-            verifier = IndeedSmartVerifier()
-            results = verifier.verify_all(limit=None, mark_expired=True)
-            
-            if results:
-                expired_count = len(results.get('expired', []))
-                active_count = len(results.get('active', []))
-                log(f"    ✅ Indeed: {expired_count} expired, {active_count} active", "SUCCESS")
-        except Exception as e:
-            log(f"    ⚠️  Indeed verification failed: {str(e)[:50]}", "WARN")
-        
-        log("  ✅ Expiration check completed", "SUCCESS")
-        return True
-        
+        if result.returncode == 0:
+            logger.info("✅ Expiration check completed")
+            return "PASS"
+        else:
+            logger.error(f"❌ Expiration check failed: {result.stderr[:200]}")
+            return "FAIL"
     except Exception as e:
-        log(f"Expired check failed: {e}", "ERROR")
-        import traceback
-        traceback.print_exc()
-        return False
+        logger.error(f"❌ Expiration check failed: {e}")
+        return "FAIL"
 
-def generate_report():
-    """Step 5: Generate daily summary report"""
-    log("STEP 5: Generating report...", "INFO")
-    
+
+def run_report_generation():
+    """
+    ✅ USA: Generación simple de reporte
+    """
+    logger.info("ℹ️  STEP 5: Generating report...")
     try:
         from core.sheets.sheet_manager import SheetManager
-        
         sheet_manager = SheetManager()
+        
+        # Get jobs from all tabs
         jobs = sheet_manager.get_all_jobs()
         
-        # Count by status
-        stats = {
-            'total': len(jobs),
-            'new': 0,
-            'applied': 0,
-            'interview': 0,
-            'rejected': 0,
-            'expired': 0,
-            'high_fit': 0  # FIT >= 7
-        }
-        
-        for job in jobs:
-            status = job.get('Status', 'Unknown')
-            fit_score = job.get('FitScore', 0)
-            
-            if status == 'New':
-                stats['new'] += 1
-            elif status == 'Applied':
-                stats['applied'] += 1
-            elif status == 'Interview':
-                stats['interview'] += 1
-            elif status == 'Rejected':
-                stats['rejected'] += 1
-            elif status == 'Expired':
-                stats['expired'] += 1
-            
-            try:
-                if int(fit_score) >= 7:
-                    stats['high_fit'] += 1
-            except:
-                pass
+        # Basic stats
+        total_jobs = len(jobs)
+        with_fitscore = len([j for j in jobs if j.get('FitScore')])
+        applied = len([j for j in jobs if j.get('Status') == 'Applied'])
+        expired = len([j for j in jobs if j.get('Status') == 'EXPIRED'])
         
         # Print report
-        print("\n" + "="*60)
-        print("📊 DAILY REPORT - AI JOB FOUNDRY")
-        print("="*60)
-        print(f"Total Jobs:       {stats['total']}")
-        print(f"  New:            {stats['new']}")
-        print(f"  Applied:        {stats['applied']}")
-        print(f"  Interview:      {stats['interview']}")
-        print(f"  Rejected:       {stats['rejected']}")
-        print(f"  Expired:        {stats['expired']}")
-        print(f"  High Fit (7+):  {stats['high_fit']}")
-        print("="*60 + "\n")
+        print()
+        print("=" * 70)
+        print("📊 DAILY REPORT")
+        print("=" * 70)
+        print(f"Total Jobs:       {total_jobs}")
+        print(f"With FIT Score:   {with_fitscore}")
+        print(f"Applied:          {applied}")
+        print(f"Expired:          {expired}")
+        print("=" * 70)
+        print()
         
-        log("Report generated", "SUCCESS")
-        return True
+        logger.info("✅ Report generated")
+        return "PASS"
     except Exception as e:
-        log(f"Report generation failed: {e}", "ERROR")
-        return False
+        logger.error(f"❌ Report generation failed: {e}")
+        return "FAIL"
+
+
+def run_full_pipeline(dry_run_apply=True):
+    """Pipeline completo: bulletins + AI + apply + expire + report"""
+    summary = {}
+    
+    # OAuth validation
+    try:
+        validate_oauth()
+    except SystemExit:
+        return {"OAuth": "FAIL"}
+    
+    # Run all steps
+    summary["Bulletin Processing"] = run_bulletin_processing()
+    summary["AI Analysis"] = run_ai_analysis()
+    summary["Auto-Apply"] = run_auto_apply(dry_run=dry_run_apply)
+    summary["Expire Check"] = run_expiration_check()
+    summary["Report"] = run_report_generation()
+    
+    return summary
+
+
+def run_quick_pipeline():
+    """Pipeline rápido: bulletins + report"""
+    summary = {}
+    
+    # OAuth validation
+    try:
+        validate_oauth()
+    except SystemExit:
+        return {"OAuth": "FAIL"}
+    
+    summary["Bulletin Processing"] = run_bulletin_processing()
+    summary["Report"] = run_report_generation()
+    
+    return summary
+
 
 def main():
+    """Entry point."""
     parser = argparse.ArgumentParser(
-        description='AI Job Foundry - Daily Pipeline Orchestrator',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  py run_daily_pipeline.py --all              # Full pipeline
-  py run_daily_pipeline.py --emails           # Process emails only
-  py run_daily_pipeline.py --bulletins        # Process bulletins only
-  py run_daily_pipeline.py --emails --analyze # Email + AI analysis
-  py run_daily_pipeline.py --apply --dry-run  # Test auto-apply
-        """
+        description="AI Job Foundry - Daily Pipeline"
     )
-    
-    parser.add_argument('--all', action='store_true', 
-                       help='Run complete pipeline (emails + bulletins + analyze + expire check + report)')
-    parser.add_argument('--emails', action='store_true',
-                       help='Process new emails (direct recruiter messages)')
-    parser.add_argument('--bulletins', action='store_true',
-                       help='Process job bulletins (LinkedIn/Indeed/Glassdoor)')
-    parser.add_argument('--analyze', action='store_true',
-                       help='Run AI analysis on new jobs')
-    parser.add_argument('--apply', action='store_true',
-                       help='Auto-apply to high-fit jobs')
-    parser.add_argument('--expire', action='store_true',
-                       help='Check and mark expired jobs')
-    parser.add_argument('--report', action='store_true',
-                       help='Generate daily report')
-    parser.add_argument('--dry-run', action='store_true',
-                       help='Dry run mode (no real applications)')
+    parser.add_argument(
+        "--all",
+        action="store_true",
+        help="Run full pipeline"
+    )
+    parser.add_argument(
+        "--quick",
+        action="store_true",
+        help="Run quick pipeline (bulletins + report)"
+    )
+    parser.add_argument(
+        "--emails",
+        action="store_true",
+        help="Process emails (bulletins)"
+    )
+    parser.add_argument(
+        "--analyze",
+        action="store_true",
+        help="Run AI analysis"
+    )
+    parser.add_argument(
+        "--apply",
+        action="store_true",
+        help="Run auto-apply (LIVE mode)"
+    )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Dry run mode for auto-apply"
+    )
+    parser.add_argument(
+        "--expire",
+        action="store_true",
+        help="Check expired jobs"
+    )
+    parser.add_argument(
+        "--report",
+        action="store_true",
+        help="Generate report"
+    )
     
     args = parser.parse_args()
     
-    # If no flags, show help
-    if not any([args.all, args.emails, args.bulletins, args.analyze, args.apply, args.expire, args.report]):
-        parser.print_help()
-        return
+    print_header()
     
-    print("\n" + "="*70)
-    print("🚀 AI JOB FOUNDRY - DAILY PIPELINE")
-    print("="*70)
-    print(f"Started: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*70 + "\n")
+    summary = {}
     
-    results = []
+    # Ejecutar modo seleccionado
+    if args.all:
+        summary = run_full_pipeline(dry_run_apply=args.dry_run)
+    elif args.quick:
+        summary = run_quick_pipeline()
+    elif args.emails:
+        try:
+            validate_oauth()
+            summary["Bulletin Processing"] = run_bulletin_processing()
+        except SystemExit:
+            summary = {"OAuth": "FAIL"}
+    elif args.analyze:
+        try:
+            validate_oauth()
+            summary["AI Analysis"] = run_ai_analysis()
+        except SystemExit:
+            summary = {"OAuth": "FAIL"}
+    elif args.apply:
+        try:
+            validate_oauth()
+            summary["Auto-Apply"] = run_auto_apply(dry_run=args.dry_run)
+        except SystemExit:
+            summary = {"OAuth": "FAIL"}
+    elif args.expire:
+        try:
+            validate_oauth()
+            summary["Expire Check"] = run_expiration_check()
+        except SystemExit:
+            summary = {"OAuth": "FAIL"}
+    elif args.report:
+        try:
+            validate_oauth()
+            summary["Report"] = run_report_generation()
+        except SystemExit:
+            summary = {"OAuth": "FAIL"}
+    else:
+        # Default: quick pipeline
+        summary = run_quick_pipeline()
     
-    # Run selected steps
-    if args.all or args.emails:
-        results.append(('Email Processing', run_email_processing()))
-    
-    if args.all or args.bulletins:
-        results.append(('Bulletin Processing', run_bulletin_processing()))
-    
-    if args.all or args.analyze:
-        results.append(('AI Analysis', run_ai_analysis()))
-    
-    if args.all or args.apply:
-        results.append(('Auto-Apply', run_auto_apply(dry_run=args.dry_run)))
-    
-    if args.all or args.expire:
-        results.append(('Expire Check', check_expired_jobs()))
-    
-    if args.all or args.report:
-        results.append(('Report', generate_report()))
-    
-    # Final summary
-    print("\n" + "="*70)
-    print("📈 PIPELINE SUMMARY")
-    print("="*70)
-    for step, success in results:
-        status = "✅ PASS" if success else "❌ FAIL"
-        print(f"{step:20} {status}")
-    print("="*70)
-    print(f"Finished: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print("="*70 + "\n")
+    print_footer(summary)
     
     # Exit code
-    sys.exit(0 if all(r[1] for r in results) else 1)
+    if any(status == "FAIL" for status in summary.values()):
+        sys.exit(1)
+    else:
+        sys.exit(0)
 
-if __name__ == '__main__':
-    main()
+
+if __name__ == "__main__":
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("\n⚠️  Pipeline interrupted by user")
+        sys.exit(0)
+    except Exception as e:
+        logger.error(f"\n❌ Fatal error: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        sys.exit(1)

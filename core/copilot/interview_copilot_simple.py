@@ -20,8 +20,18 @@ class InterviewCopilot:
     def __init__(self):
         self.cv_path = Path("data/cv_descriptor.txt")
         self.cv_content = self.load_cv()
-        self.llm_endpoint = "http://172.23.0.1:11434/v1/chat/completions"
+        
+        # ✅ FIX: Detect LM Studio IP dynamically from .env
+        from dotenv import load_dotenv
+        import os
+        load_dotenv()
+        
+        lm_studio_ip = os.getenv("LM_STUDIO_IP", "127.0.0.1")
+        lm_studio_port = os.getenv("LM_STUDIO_PORT", "11434")
+        self.llm_endpoint = f"http://{lm_studio_ip}:{lm_studio_port}/v1/chat/completions"
         self.current_model = "qwen2.5-14b-instruct"
+        
+        print(f"🔍 Connecting to LM Studio at: {self.llm_endpoint}")
         
         # Audio settings
         self.is_recording = False
@@ -505,18 +515,40 @@ if __name__ == "__main__":
     
     # Verificar IA
     print("🔍 Verificando IA...")
-    try:
-        response = requests.get("http://172.23.0.1:11434/v1/models", timeout=5)
-        if response.status_code == 200:
-            print("✅ IA disponible")
-        else:
-            print("⚠️ IA con problemas")
-    except:
-        print("❌ No se puede conectar con IA")
-        print("   Verifica que esté corriendo")
-        sys.exit(1)
+    
+    # Intentar detectar LM Studio IP automáticamente
+    lm_studio_ips = [
+        "http://127.0.0.1:11434",
+        "http://172.23.0.1:11434",
+        "http://192.168.100.28:11434",
+        "http://localhost:11434"
+    ]
+    
+    ai_available = False
+    working_ip = None
+    
+    for ip in lm_studio_ips:
+        try:
+            response = requests.get(f"{ip}/v1/models", timeout=2)
+            if response.status_code == 200:
+                print(f"✅ IA disponible en {ip}")
+                ai_available = True
+                working_ip = ip
+                break
+        except:
+            continue
+    
+    if not ai_available:
+        print("⚠️  No se pudo conectar con LM Studio")
+        print("   El copilot funcionará sin sugerencias de IA")
+        print("   Puedes usar el modo manual\n")
+        # Continuar sin IA
     
     copilot = InterviewCopilot()
+    
+    # Usar IP detectada si hay
+    if working_ip:
+        copilot.llm_endpoint = f"{working_ip}/v1/chat/completions"
     
     # Personalizar
     print("\n📝 Personalización:")

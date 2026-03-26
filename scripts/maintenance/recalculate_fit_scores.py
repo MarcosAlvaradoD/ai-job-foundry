@@ -3,12 +3,20 @@
 AI JOB FOUNDRY - Recalculate FIT Scores with Salary Weight
 Recalcula FIT scores considerando salario como factor crítico
 """
+import sys
 import os
 import re
+from pathlib import Path
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.credentials import Credentials
 from datetime import datetime
+
+# ✅ FIX: Windows UTF-8 support for emojis
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
 
 load_dotenv()
 
@@ -134,8 +142,12 @@ def recalculate_fit_scores():
     print("="*70)
     
     # Get credentials
+    # ✅ FIX: Usar rutas absolutas
+    base_path = Path(__file__).parent.parent.parent
+    token_path = base_path / "data" / "credentials" / "token.json"
+    
     creds = Credentials.from_authorized_user_file(
-        'data/credentials/token.json',
+        str(token_path),
         ['https://www.googleapis.com/auth/spreadsheets']
     )
     

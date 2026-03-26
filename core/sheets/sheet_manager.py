@@ -25,9 +25,7 @@ SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/gmail.modify',
-    'https://www.googleapis.com/auth/gmail.labels',
-    'https://www.googleapis.com/auth/gmail.send',
-    'https://www.googleapis.com/auth/calendar'
+    'https://www.googleapis.com/auth/gmail.labels'
 ]
 
 class SheetManager:
@@ -50,8 +48,10 @@ class SheetManager:
     def _get_credentials(self):
         """Obtiene credenciales OAuth de Google"""
         creds = None
-        token_path = "data/credentials/token.json"
-        credentials_path = "data/credentials/credentials.json"
+        # ✅ FIX: Usar rutas absolutas como en env_path
+        base_path = Path(__file__).parent.parent.parent
+        token_path = base_path / "data" / "credentials" / "token.json"
+        credentials_path = base_path / "data" / "credentials" / "credentials.json"
         
         # Token guardado previamente
         if os.path.exists(token_path):
@@ -101,10 +101,11 @@ class SheetManager:
         
         # Convertir a lista de dicts
         jobs = []
-        for row in values[1:]:
+        for idx, row in enumerate(values[1:], start=2):  # start=2 porque row 1 = headers
             # Rellenar con vacíos si faltan columnas
             row_data = row + [''] * (len(headers) - len(row))
             job = dict(zip(headers, row_data))
+            job['_row'] = idx  # Guardar número de fila para updates
             jobs.append(job)
         
         return jobs

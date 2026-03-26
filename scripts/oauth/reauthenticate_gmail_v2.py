@@ -7,8 +7,8 @@ import os
 import sys
 from pathlib import Path
 
-# Add project root to path
-project_root = Path(__file__).parent
+# Add project root to path (3 niveles arriba: oauth -> scripts -> raíz)
+project_root = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(project_root))
 
 from google_auth_oauthlib.flow import InstalledAppFlow
@@ -29,10 +29,14 @@ def main():
     print("GMAIL OAUTH RE-AUTHENTICATION")
     print("="*70)
     
-    # Paths
+    # Paths (correctos ahora)
     creds_dir = project_root / "data" / "credentials"
     credentials_path = creds_dir / "credentials.json"
     token_path = creds_dir / "token.json"
+    
+    print(f"\n[DEBUG] Project root: {project_root}")
+    print(f"[DEBUG] Credentials dir: {creds_dir}")
+    print(f"[DEBUG] Token path: {token_path}")
     
     # Verify credentials.json exists
     if not credentials_path.exists():

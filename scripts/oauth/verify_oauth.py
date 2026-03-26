@@ -35,14 +35,12 @@ if os.path.exists(token_path):
     scopes = token_data.get('scopes', [])
     print(f"   Total scopes: {len(scopes)}")
     
-    expected_scopes = [
-        'https://www.googleapis.com/auth/spreadsheets',
-        'https://www.googleapis.com/auth/gmail.readonly',
-        'https://www.googleapis.com/auth/gmail.modify',
-        'https://www.googleapis.com/auth/gmail.labels',
-        'https://www.googleapis.com/auth/gmail.send',
-        'https://www.googleapis.com/auth/calendar'
-    ]
+    expected_SCOPES = [
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/gmail.labels'
+]
     
     all_match = True
     for scope in expected_scopes:

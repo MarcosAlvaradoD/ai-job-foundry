@@ -14,6 +14,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# ✅ FIX: Windows UTF-8 support for emojis
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 import re
 import os
 from typing import List, Dict, Optional
@@ -28,11 +34,18 @@ import base64
 from email import policy
 from email.parser import BytesParser
 
+# Import AI Email Parser for intelligent HTML parsing
+from core.automation.ai_email_parser import AIEmailParser
+
 # Load environment
 load_dotenv()
 
-SCOPES = ['https://www.googleapis.com/auth/gmail.readonly', 
-          'https://www.googleapis.com/auth/spreadsheets']
+SCOPES = [
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/gmail.labels',
+    'https://www.googleapis.com/auth/spreadsheets'
+]
 
 class JobBulletinProcessor:
     """Processes job bulletin emails with multiple listings"""
@@ -42,6 +55,9 @@ class JobBulletinProcessor:
         self.gmail_service = build('gmail', 'v1', credentials=self.credentials)
         self.sheets_service = build('sheets', 'v4', credentials=self.credentials)
         self.sheet_id = os.getenv('GOOGLE_SHEETS_ID')
+        
+        # Initialize AI Email Parser for intelligent parsing
+        self.ai_parser = AIEmailParser()
         
         # Track processed emails
         self.processed_cache_file = Path(__file__).parent.parent.parent / 'data' / 'state' / 'processed_bulletins.txt'
@@ -56,8 +72,10 @@ class JobBulletinProcessor:
     def _get_credentials(self):
         """Get OAuth credentials"""
         creds = None
-        token_path = "data/credentials/token.json"
-        credentials_path = "data/credentials/credentials.json"
+        # ✅ FIX: Usar rutas absolutas
+        base_path = Path(__file__).parent.parent.parent
+        token_path = base_path / "data" / "credentials" / "token.json"
+        credentials_path = base_path / "data" / "credentials" / "credentials.json"
         
         if os.path.exists(token_path):
             creds = Credentials.from_authorized_user_file(token_path, SCOPES)
@@ -265,43 +283,78 @@ class JobBulletinProcessor:
     
     def extract_glassdoor_jobs(self, html_content: str) -> List[Dict]:
         """
-        Extract job listings from Glassdoor bulletin email
+        Extract job listings from Glassdoor bulletin email using AI
         
-        Glassdoor emails structure:
-        - Job info in <table> elements
-        - Title in <p> with font-weight:600 (14px)
-        - Company in <p> before title
-        - Location in <p> after title  
-        - Salary in <p> with k$ pattern
-        - job_listing_id in tracking pixel URL
+        NEW APPROACH (2025-12-17):
+        - Uses AIEmailParser with chunking for robustness
+        - Adapts to HTML format changes automatically
+        - Falls back to regex if AI fails
+        
+        This replaces the brittle regex-only approach that broke when
+        Glassdoor changed their email HTML structure.
         """
         jobs = []
         
         try:
-            # Extract job_listing_id from tracking URL (Pattern 4 - works!)
-            job_id_pattern = r'jobAlertAlert&amp;utm_content=ja-jobpos\d+-(\d+)'
-            job_ids = re.findall(job_id_pattern, html_content)
+            # Try AI-powered extraction first (ROBUST - adapts to format changes)
+            print("   🤖 Using AI parser for Glassdoor bulletin...")
+            jobs = self.ai_parser.parse_glassdoor_bulletin(html_content)
             
-            # Extract job titles (font-weight:600, 14px)
+            if jobs:
+                print(f"   ✅ AI extracted {len(jobs)} jobs successfully")
+                return jobs
+            else:
+                print("   ⚠️  AI extraction returned 0 jobs, trying fallback...")
+            
+        except Exception as e:
+            print(f"   ⚠️  AI parser failed: {e}")
+            print("   📝 Falling back to regex extraction...")
+        
+        # FALLBACK: Original regex-based extraction (FRAGILE - breaks on format changes)
+        try:
+            job_ids = []
+            
+            # Multiple URL extraction patterns
+            patterns = [
+                r'https://www\.glassdoor\.com/job-listing/JL_(\d+)\.htm',  # Direct URL
+                r'jobAlertAlert&amp;utm_content=ja-jobpos\d+-(\d+)',        # Tracking pixel
+                r'job_listing_id=(\d+)',                                     # Parameter
+                r'jobListingId%3D(\d+)',                                     # Encoded
+                r'glassdoor\.com/[^"]*?(\d{10,})'                           # Generic
+            ]
+            
+            for pattern in patterns:
+                job_ids.extend(re.findall(pattern, html_content))
+            
+            # Remove duplicates while preserving order
+            seen = set()
+            unique_job_ids = []
+            for job_id in job_ids:
+                if job_id not in seen:
+                    seen.add(job_id)
+                    unique_job_ids.append(job_id)
+            
+            job_ids = unique_job_ids
+            
+            # Extract titles (OLD format - may not work with new emails)
             title_pattern = r'<p style="font-size:14px;line-height:1\.4;margin:0;font-weight:600">([^<]+)</p>'
             titles = re.findall(title_pattern, html_content)
             
-            # Extract companies (appears before title in table structure)
+            # Extract companies
             company_pattern = r'<p style="font-size:12px;line-height:1\.33;margin:0;font-weight:400;white-space:normal">([^<]+)</p>'
             companies = re.findall(company_pattern, html_content)
             
-            # Extract locations (simpler pattern)
+            # Extract locations
             location_pattern = r'<p style="font-size:12px;line-height:1\.33;margin:0;margin-top:4px">([^<$]+)</p>'
             locations = re.findall(location_pattern, html_content)
             
-            # Extract salaries (pattern with k$)
-            salary_pattern = r'<p style="font-size:12px;line-height:1\.33;margin:0;margin-top:4px">(\d+\s*k\$[^<]*)</p>'
-            salaries = re.findall(salary_pattern, html_content)
-            
             # Build jobs from extracted data
             for i, title in enumerate(titles):
-                # Construct URL from job_listing_id
-                job_url = f"https://www.glassdoor.com/job-listing/JL_{job_ids[i]}.htm" if i < len(job_ids) else "Unknown"
+                if i < len(job_ids):
+                    job_url = f"https://www.glassdoor.com/job-listing/JL_{job_ids[i]}.htm"
+                else:
+                    job_url = "Unknown"
+                    print(f"   ⚠️  WARNING: No URL found for job #{i+1}: {title[:50]}...")
                 
                 job = {
                     'Source': 'Glassdoor',
@@ -309,7 +362,7 @@ class JobBulletinProcessor:
                     'Role': title.strip(),
                     'Company': companies[i].strip() if i < len(companies) else 'Unknown',
                     'Location': locations[i].strip() if i < len(locations) else 'Unknown',
-                    'Comp': salaries[i].strip() if i < len(salaries) else '',
+                    'Comp': '',
                     'CreatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     'Status': 'New'
                 }
@@ -317,8 +370,114 @@ class JobBulletinProcessor:
             
             print(f"   🔍 Extracted {len(titles)} titles, {len(companies)} companies, {len(job_ids)} job IDs")
             
+            # If regex found IDs but no titles, create minimal jobs with IDs only
+            if not titles and job_ids:
+                print(f"   ⚠️  Found {len(job_ids)} IDs but no titles - creating placeholder jobs")
+                for job_id in job_ids:
+                    job = {
+                        'Source': 'Glassdoor',
+                        'ApplyURL': f"https://www.glassdoor.com/job-listing/JL_{job_id}.htm",
+                        'Role': 'Unknown - Pending AI Analysis',
+                        'Company': 'Unknown',
+                        'Location': 'Unknown',
+                        'Comp': '',
+                        'CreatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                        'Status': 'New'
+                    }
+                    jobs.append(job)
+            
         except Exception as e:
-            print(f"   ⚠️  Error extracting Glassdoor jobs: {e}")
+            print(f"   ⚠️  Error in regex fallback: {e}")
+            import traceback
+            traceback.print_exc()
+        
+        return jobs
+    
+    def extract_user_jobs(self, text_content: str, html_content: str = "") -> List[Dict]:
+        """
+        Extract job URLs from user-submitted emails
+        Format: URLs from forwarded emails or manual lists
+        
+        Args:
+            text_content: Plain text content
+            html_content: HTML content (optional, for better extraction)
+        """
+        jobs = []
+        
+        try:
+            # Combine text and HTML for better extraction
+            combined_content = text_content + "\n" + html_content
+            
+            # Comprehensive URL patterns
+            patterns = {
+                'LinkedIn': [
+                    r'https?://(?:www\.)?linkedin\.com/jobs/view/\d+',
+                    r'https?://(?:www\.)?linkedin\.com/comm/jobs/view/\d+',
+                ],
+                'Indeed': [
+                    r'https?://(?:www\.)?indeed\.com/(?:viewjob|rc/clk)[^\s<>"]+',
+                    r'https?://(?:www\.)?indeed\.com/[^\s<>"]*',
+                ],
+                'Glassdoor': [
+                    r'https?://(?:www\.)?glassdoor\.com/job-listing/[^\s<>"]+',
+                    r'https?://(?:www\.)?glassdoor\.com/partner/jobListing[^\s<>"]+',
+                ],
+                'Generic': [
+                    # Careers/Jobs subdomain patterns
+                    r'https?://(?:careers|jobs|hiring)\.[\w\-]+\.com/[^\s<>"]+',
+                    # Career page patterns
+                    r'https?://(?:www\.)?[\w\-]+\.com/careers/[^\s<>"]+',
+                    r'https?://(?:www\.)?[\w\-]+\.com/jobs/[^\s<>"]+',
+                    # Workday, Greenhouse, Lever, etc
+                    r'https?://[\w\-]+\.(?:workday|greenhouse|lever|smartrecruiters|bamboohr|icims)\.com/[^\s<>"]+',
+                    # Generic job/career/apply URLs
+                    r'https?://[^\s<>"]*(?:job|career|apply|vacancy|position)[^\s<>"]*',
+                ]
+            }
+            
+            urls = []
+            
+            # Extract URLs from all patterns
+            for source, pattern_list in patterns.items():
+                for pattern in pattern_list:
+                    found_urls = re.findall(pattern, combined_content, re.IGNORECASE)
+                    for url in found_urls:
+                        # Clean URL (remove HTML entities, trailing chars)
+                        url = url.replace('&amp;', '&')
+                        url = url.rstrip('.,;:\'")>')
+                        urls.append((source, url))
+            
+            # Remove duplicates while preserving source
+            seen = set()
+            unique_urls = []
+            for source, url in urls:
+                if url not in seen:
+                    seen.add(url)
+                    unique_urls.append((source, url))
+            
+            # Create job entries
+            for source, url in unique_urls:
+                job = {
+                    'Source': source,
+                    'ApplyURL': url,
+                    'Role': 'Pending AI Analysis',
+                    'Company': 'Unknown',
+                    'Location': 'Unknown',
+                    'Comp': '',
+                    'CreatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'Status': 'New'
+                }
+                jobs.append(job)
+            
+            if jobs:
+                print(f"   ✅ Extracted {len(jobs)} URLs from user email")
+            else:
+                print(f"   ⚠️  No URLs found in email (checked both text and HTML)")
+            
+        except Exception as e:
+            print(f"   ⚠️  Error extracting user URLs: {e}")
+            import traceback
+            traceback.print_exc()
         
         return jobs
     
@@ -327,12 +486,29 @@ class JobBulletinProcessor:
         sender_lower = sender.lower()
         subject_lower = subject.lower()
         
+        # ✅ MEJORADO: Detectar emails del usuario con URLs de jobs
+        # Reconocer emails reenviados con patrones comunes
+        user_emails = ['markalvati@gmail.com', 'fbmark@gmail.com', 'marcos alberto alvarado']
+        user_patterns = ['ofertas', 'jobs', 'vacantes', 'busca personal', 'cargo de', 'fwd:', 'new jobs posted']
+        
+        is_user_email = any(email in sender_lower for email in user_emails)
+        has_job_pattern = any(pattern in subject_lower for pattern in user_patterns)
+        
+        if is_user_email and has_job_pattern:
+            return 'user_urls'
+        
         if 'linkedin' in sender_lower or 'jobalerts-noreply@linkedin.com' in sender_lower:
             return 'linkedin'
         elif 'indeed' in sender_lower or 'alert@indeed.com' in sender_lower:
             return 'indeed'
         elif 'glassdoor' in sender_lower or 'noreply@glassdoor.com' in sender_lower:
             return 'glassdoor'
+        elif 'adzuna' in sender_lower or 'no-reply@adzuna.com' in sender_lower:
+            return 'adzuna'
+        elif 'computrabajo' in sender_lower or 'alertas@computrabajo.com' in sender_lower:
+            return 'computrabajo'
+        elif 'jobleads' in sender_lower or 'mailer@jobleads.com' in sender_lower:
+            return 'jobleads'
         
         return None
     
@@ -425,15 +601,28 @@ class JobBulletinProcessor:
         print("Processing job alert emails from LinkedIn, Indeed, and Glassdoor...")
         print("="*70 + "\n")
         
-        # Get bulletins - SOLO emails con ofertas de trabajo
-        query = (
-            'from:(noreply@glassdoor.com OR jobs-noreply@linkedin.com OR noreply@indeed.com) '
-            'subject:(empleos OR jobs OR "nuevos empleos" OR "new jobs" OR postúlate OR apply) '
-            'newer_than:7d'
-        )
+        # ✅ FIX: Buscar en label JOBS/Inbound directamente
+        # Get label ID for JOBS/Inbound
+        label_id = None
+        try:
+            labels_result = self.gmail_service.users().labels().list(userId='me').execute()
+            labels = labels_result.get('labels', [])
+            for label in labels:
+                if label['name'] == 'JOBS/Inbound':
+                    label_id = label['id']
+                    break
+        except Exception as e:
+            print(f"⚠️  Error getting labels: {e}")
+        
+        if not label_id:
+            print("❌ Label 'JOBS/Inbound' not found!")
+            print("   Please create the label or check Gmail filters")
+            return
+        
+        # Get messages from JOBS/Inbound label
         results = self.gmail_service.users().messages().list(
             userId='me',
-            q=query,
+            labelIds=[label_id],
             maxResults=max_emails
         ).execute()
         
@@ -487,58 +676,116 @@ class JobBulletinProcessor:
             # Detect bulletin type
             bulletin_type = self.detect_bulletin_type(sender, subject)
             
+            # ✅ NUEVO: Si está en JOBS/Inbound, SIEMPRE procesarlo como user_urls
+            # No importa el sender o subject, si está en esta carpeta es un job
             if not bulletin_type:
-                # Not a bulletin, skip
-                print(f"⏭️  Not a job bulletin: {subject[:50]}... (from: {sender[:30]}...)")
-                continue
+                # Asumir que es un email del usuario con URLs
+                bulletin_type = 'user_urls'
+                print(f"📨 Processing email as USER_URLS (default for JOBS/Inbound):")
+            else:
+                print(f"📨 Processing {bulletin_type.upper()} bulletin:")
             
-            print(f"📨 Processing {bulletin_type.upper()} bulletin:")
             print(f"   Subject: {subject[:60]}...")
             
             # Extract jobs based on type
             jobs = []
-            if bulletin_type == 'linkedin':
+            if bulletin_type == 'user_urls':
+                jobs = self.extract_user_jobs(text_content, html_content)
+            elif bulletin_type == 'linkedin':
                 jobs = self.extract_linkedin_jobs(html_content)
             elif bulletin_type == 'indeed':
                 jobs = self.extract_indeed_jobs(html_content, text_content)
             elif bulletin_type == 'glassdoor':
                 jobs = self.extract_glassdoor_jobs(html_content)
             
+            elif bulletin_type == 'adzuna':
+                print("   🤖 Using AI parser for Adzuna bulletin...")
+                jobs = self.ai_parser.parse_generic_bulletin(html_content, source='Adzuna')
+            
+            elif bulletin_type == 'computrabajo':
+                print("   🤖 Using AI parser for Computrabajo bulletin...")
+                jobs = self.ai_parser.parse_generic_bulletin(html_content, source='Computrabajo')
+            
+            elif bulletin_type == 'jobleads':
+                print("   🤖 Using AI parser for JobLeads bulletin...")
+                jobs = self.ai_parser.parse_generic_bulletin(html_content, source='JobLeads')
+            
             if jobs:
                 print(f"   ✅ Found {len(jobs)} job listings")
                 
-                # ✅ NUEVO: Filtrar duplicados ANTES de guardar
-                tab_name = bulletin_type.capitalize()
-                unique_jobs = []
-                duplicates_found = 0
+                # ✅ NUEVO: Para user_urls, separar por fuente y guardar en tabs correctos
+                if bulletin_type == 'user_urls':
+                    # Separar jobs por Source
+                    jobs_by_source = {}
+                    for job in jobs:
+                        source = job.get('Source', 'Unknown')
+                        if source not in jobs_by_source:
+                            jobs_by_source[source] = []
+                        jobs_by_source[source].append(job)
+                    
+                    # Guardar cada grupo en su tab correspondiente
+                    for source, source_jobs in jobs_by_source.items():
+                        # FIX: Map "Generic" and "Unknown" to "LinkedIn" (those tabs dont exist)
+                        if source in ["Generic", "Unknown"]:
+                            source = "LinkedIn"
+                        
+                        print(f"   💾 Saving {len(source_jobs)} jobs to {source} tab...")
+                        
+                        # Filtrar duplicados
+                        unique_jobs = []
+                        duplicates_found = 0
+                        
+                        for job in source_jobs:
+                            job_url = job.get('ApplyURL', '')
+                            if job_url and self.check_job_exists_in_sheet(job_url, source):
+                                duplicates_found += 1
+                            else:
+                                unique_jobs.append(job)
+                        
+                        if duplicates_found > 0:
+                            print(f"   ⚠️  Skipped {duplicates_found} duplicates in {source}")
+                        
+                        if unique_jobs:
+                            saved = self.save_to_sheets(unique_jobs, tab_name=source)
+                            print(f"   ✅ Saved {saved} NEW jobs to {source}")
+                            total_jobs_found += saved
+                        else:
+                            print(f"   ℹ️  No new jobs in {source} (all were duplicates)")
                 
-                for job in jobs:
-                    job_url = job.get('ApplyURL', '')
-                    if job_url and self.check_job_exists_in_sheet(job_url, tab_name):
-                        duplicates_found += 1
-                    else:
-                        unique_jobs.append(job)
-                
-                if duplicates_found > 0:
-                    print(f"   ⚠️  Skipped {duplicates_found} duplicates")
-                
-                # Solo guardar jobs únicos
-                if unique_jobs:
-                    saved = self.save_to_sheets(unique_jobs, tab_name=tab_name)
-                    print(f"   💾 Saved {saved} NEW jobs to Sheets")
-                    total_jobs_found += saved
                 else:
-                    print(f"   ℹ️  No new jobs (all were duplicates)")
+                    # Procesamiento normal para otros tipos de bulletins
+                    tab_name = bulletin_type.capitalize()
+                    unique_jobs = []
+                    duplicates_found = 0
+                    
+                    for job in jobs:
+                        job_url = job.get('ApplyURL', '')
+                        if job_url and self.check_job_exists_in_sheet(job_url, tab_name):
+                            duplicates_found += 1
+                        else:
+                            unique_jobs.append(job)
+                    
+                    if duplicates_found > 0:
+                        print(f"   ⚠️  Skipped {duplicates_found} duplicates")
+                    
+                    # Solo guardar jobs únicos
+                    if unique_jobs:
+                        saved = self.save_to_sheets(unique_jobs, tab_name=tab_name)
+                        print(f"   💾 Saved {saved} NEW jobs to Sheets")
+                        total_jobs_found += saved
+                    else:
+                        print(f"   ℹ️  No new jobs (all were duplicates)")
                 
                 bulletins_processed += 1
-                
-                # ✅ NUEVO: Marcar email para eliminación
-                self.mark_email_for_deletion(msg_id)
-                
-                # Mark as processed
-                self.save_processed_id(msg_id)
             else:
-                print(f"   ⚠️  No jobs extracted (may need better parsing)\n")
+                print(f"   ⚠️  No jobs extracted (may need better parsing)")
+            
+            # ✅ CRÍTICO: Marcar email para eliminación SIEMPRE (encontró jobs o no)
+            # Esto evita que se procese el mismo email indefinidamente
+            self.mark_email_for_deletion(msg_id)
+            
+            # Mark as processed
+            self.save_processed_id(msg_id)
         
         print("="*70)
         print(f"📊 SUMMARY:")

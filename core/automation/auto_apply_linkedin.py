@@ -23,6 +23,12 @@ import sys
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
+# ✅ FIX: Windows UTF-8 support for emojis
+if sys.platform == "win32":
+    import io
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', errors='replace')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8', errors='replace')
+
 import asyncio
 from playwright.async_api import async_playwright
 from datetime import datetime
@@ -62,17 +68,30 @@ class LinkedInAutoApplier:
             return 0
         
     async def get_eligible_jobs(self):
-        """Get jobs eligible for auto-apply (FIT 7+, not applied)"""
-        all_jobs = self.sheet_manager.get_all_jobs()
+        """
+        Get jobs eligible for auto-apply from LinkedIn tab
+        
+        Criteria:
+        - FIT score >= 7
+        - Status != 'Applied' and != 'EXPIRED'
+        - Has ApplyURL
+        - From LinkedIn source (in LinkedIn tab)
+        """
+        # Get jobs specifically from LinkedIn tab
+        linkedin_jobs = self.sheet_manager.get_all_jobs(tab='linkedin')
+        
+        # Add row numbers (starts at 2, after headers)
+        for i, job in enumerate(linkedin_jobs, start=2):
+            job['_row'] = i
         
         eligible = [
-            job for job in all_jobs
+            job for job in linkedin_jobs
             if (
                 self._safe_fit_score(job.get('FitScore', 0)) >= FIT_SCORE_THRESHOLD and
-                job.get('Status') != 'Applied' and
+                job.get('Status', '').upper() not in ['APPLIED', 'EXPIRED', 'REJECTED'] and
                 job.get('ApplyURL') and
-                'linkedin.com' in job.get('ApplyURL', '').lower() and
-                'easy apply' in job.get('ApplyType', '').lower()
+                job.get('ApplyURL') != 'Unknown' and
+                'linkedin.com/jobs' in job.get('ApplyURL', '').lower()
             )
         ]
         
@@ -138,25 +157,29 @@ class LinkedInAutoApplier:
     async def update_job_status(self, job, applied=True):
         """Update job status in Google Sheets"""
         try:
-            row_index = job.get('_row_index')  # Assuming this is stored
+            row = job.get('_row')  # Row number in sheet
+            
+            if not row:
+                print("⚠️ Cannot update status - no row number")
+                return
             
             if applied:
-                self.sheet_manager.update_job_status(
-                    row_index,
-                    status='Applied',
-                    notes=f"Auto-applied on {datetime.now().strftime('%Y-%m-%d %H:%M')}"
-                )
-                print(f"✅ Updated status to 'Applied'")
+                updates = {
+                    'Status': 'Application submitted',
+                    'NextAction': f"Auto-applied {datetime.now().strftime('%Y-%m-%d %H:%M')}"
+                }
+                self.sheet_manager.update_job(row, updates, 'linkedin')
+                print(f"   ✅ Status → 'Application submitted'")
             else:
-                self.sheet_manager.update_job_status(
-                    row_index,
-                    status='ApplicationFailed',
-                    notes='Auto-apply failed - requires manual application'
-                )
-                print(f"⚠️ Updated status to 'ApplicationFailed'")
+                updates = {
+                    'Status': 'ParsedOK',
+                    'NextAction': 'Auto-apply failed - manual needed'
+                }
+                self.sheet_manager.update_job(row, updates, 'linkedin')
+                print(f"   ⚠️ Status → 'ParsedOK' (apply failed)")
                 
         except Exception as e:
-            print(f"❌ Failed to update Google Sheets: {e}")
+            print(f"   ❌ Failed to update Google Sheets: {e}")
     
     async def run(self):
         """Main auto-apply workflow"""
@@ -193,22 +216,75 @@ class LinkedInAutoApplier:
                 ]
             )
             
-            # Create context with LinkedIn session
+            # ✅ FIXED: Usa perfil de Chrome donde YA estás loggeado
+            # Esto permite que LinkedIn mantenga la sesión
             context = await browser.new_context(
                 user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-                viewport={'width': 1920, 'height': 1080}
+                viewport={'width': 1920, 'height': 1080},
+                storage_state="data/credentials/linkedin_session.json" if os.path.exists("data/credentials/linkedin_session.json") else None
             )
             
             page = await context.new_page()
             
-            # Check if user needs to login
-            print("\n⚠️ IMPORTANT: You must be logged into LinkedIn in this browser!")
-            print("Please login manually if needed, then press Enter...")
+            # ✅ AUTO-LOGIN CHECK
+            # Navigate to LinkedIn to check session
+            print("\n🔐 Checking LinkedIn session...")
+            await page.goto("https://www.linkedin.com/feed/", wait_until='domcontentloaded', timeout=15000)
+            await asyncio.sleep(2)
             
-            if not self.dry_run:
-                input()
+            # Check if logged in (look for feed)
+            current_url = page.url
+            if 'login' in current_url or 'checkpoint' in current_url:
+                print("⚠️  Not logged in - attempting auto-login...")
+                
+                # Get credentials from .env
+                linkedin_email = os.getenv('LINKEDIN_EMAIL')
+                linkedin_password = os.getenv('LINKEDIN_PASSWORD')
+                
+                if not linkedin_email or not linkedin_password:
+                    print("\n❌ ERROR: LinkedIn credentials not found in .env!")
+                    print("Please add:")
+                    print("  LINKEDIN_EMAIL=your@email.com")
+                    print("  LINKEDIN_PASSWORD=your_password")
+                    await browser.close()
+                    return
+                
+                # Navigate to login page
+                print("🔐 Logging in...")
+                await page.goto("https://www.linkedin.com/login", wait_until='domcontentloaded')
+                await asyncio.sleep(2)
+                
+                # Fill credentials
+                await page.fill('input#username', linkedin_email)
+                await asyncio.sleep(1)
+                await page.fill('input#password', linkedin_password)
+                await asyncio.sleep(1)
+                
+                # Click sign in
+                await page.click('button[type="submit"]')
+                await asyncio.sleep(5)
+                
+                # Check if login successful
+                current_url = page.url
+                if 'feed' not in current_url and 'checkpoint' not in current_url:
+                    print("\n❌ ERROR: Auto-login failed!")
+                    print("Possible reasons:")
+                    print("  - Wrong credentials")
+                    print("  - LinkedIn detected automation")
+                    print("  - 2FA required (login manually once)")
+                    await browser.close()
+                    return
+                
+                print("✅ Auto-login successful!")
+            else:
+                print("✅ LinkedIn session already active!")
             
-            # Process each eligible job
+            # ✅ GUARDAR sesión para próximas ejecuciones
+            os.makedirs("data/credentials", exist_ok=True)
+            await context.storage_state(path="data/credentials/linkedin_session.json")
+            print("   💾 Sesión guardada para próximas ejecuciones")
+            
+            # Process each eligible job (NO USER INPUT REQUIRED)
             for i, job in enumerate(eligible_jobs, 1):
                 print(f"\n[{i}/{len(eligible_jobs)}] Processing job...")
                 
@@ -259,6 +335,11 @@ async def main():
         action='store_true',
         help='Live mode - submit real applications'
     )
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help='Skip confirmation prompt (for pipeline automation)'
+    )
     
     args = parser.parse_args()
     
@@ -266,10 +347,14 @@ async def main():
     if args.live:
         dry_run = False
         print("\n⚠️ WARNING: LIVE MODE - Real applications will be submitted!")
-        response = input("Are you sure you want to continue? (yes/no): ")
-        if response.lower() != 'yes':
-            print("❌ Cancelled")
-            return
+        # ✅ FIX: Skip confirmation if --force flag is present (for pipeline automation)
+        if not args.force:
+            response = input("Are you sure you want to continue? (yes/no): ")
+            if response.lower() != 'yes':
+                print("❌ Cancelled")
+                return
+        else:
+            print("✅ Auto-confirmed with --force flag")
     else:
         dry_run = True
     

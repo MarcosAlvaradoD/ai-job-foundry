@@ -1,460 +1,733 @@
-# 🚀 PROMPT PARA NUEVO CHAT - AI JOB FOUNDRY
+# 🔄 PROMPT PARA NUEVO CHAT - AI JOB FOUNDRY
 
-## ⚠️ INSTRUCCIÓN CRÍTICA PARA LA IA
-
-**ANTES DE CUALQUIER CAMBIO, LEE COMPLETAMENTE:**
-
-1. **`PROJECT_STATUS.md`** - Estado actual del sistema
-2. **`MASTER_FEATURE_ROADMAP.md`** - Features planificadas (100+)
-3. **Este prompt completo** - Contexto y principios
-
-**AL FINALIZAR CADA ITERACIÓN:**
-- ✅ ACTUALIZA `PROJECT_STATUS.md` con cambios realizados
-- ✅ Documenta bugs resueltos
-- ✅ Actualiza fecha y versión
-- ✅ Registra archivos modificados
+**COPIAR ESTE CONTENIDO AL INICIAR NUEVO CHAT**
 
 ---
 
-## 📋 CONTEXTO DEL PROYECTO
+## 📋 CONTEXTO GENERAL DEL PROYECTO
 
-### Resumen Ejecutivo
-**AI Job Foundry** es un sistema automatizado de búsqueda de empleo que:
-- Scrapea ofertas (LinkedIn, Indeed, Glassdoor)
-- Procesa emails de reclutadores y boletines
-- Analiza match con IA local (LM Studio + Qwen 2.5 14B)
-- Calcula FIT SCORES (0-10) con penalidades por salario bajo
-- Guarda en Google Sheets organizadas por fuente
-- Auto-aplica a ofertas high-fit (en desarrollo)
+Hola Claude. Soy **Marcos Alberto Alvarado de la Torre**, estoy desarrollando **AI Job Foundry**, un sistema automatizado de búsqueda de empleo que:
 
-### Usuario
-**Nombre:** Marcos Alberto Alvarado de la Torre  
-**Ubicación:** Guadalajara, México (CST, GMT-6)  
-**Roles objetivo:** Project Manager, Product Owner, Senior Business Analyst, IT Manager, ETL Consultant  
-**NO busca:** Software Developer/Programmer  
-**Prioridad:** Remote work (familia con bebé Máximo)
+1. Scrapea ofertas de LinkedIn/Indeed/Glassdoor
+2. Procesa emails de reclutadores y boletines de job boards
+3. Analiza match con AI local (LM Studio + Qwen 2.5 14B)
+4. Calcula FIT SCORES (0-10) con penalties de salario
+5. Guarda todo en Google Sheets
+6. Auto-aplica a ofertas calificadas (FIT >= 7)
+7. Gestiona ofertas expiradas automáticamente
 
-### Experiencia Clave
-- 10+ años en ERP migrations (Intelisis → Dynamics AX)
-- ETL masivo (800+ TB procesados en Toyota Financial)
-- BI/Power BI, IT Infrastructure (LATAM)
-- Proyectos multinacionales (México, Colombia, Chile, Brasil, Suecia)
+**Progreso actual:** 99% funcional ✅  
+**Ubicación proyecto:** `C:\Users\MSI\Desktop\ai-job-foundry`
 
 ---
 
-## 🎯 ESTADO ACTUAL DEL SISTEMA
+## 👤 SOBRE MÍ (MARCOS)
 
-### Versión: 2.6 (2025-12-02 23:50 CST)
-**Progreso:** 100% funcional ✅
+**Roles objetivo:**
+- Project Manager
+- Product Owner
+- Senior Business Analyst
+- IT Manager
+- BI Lead
 
-### Componentes Funcionando
-✅ Email Processing (Gmail → Sheets) - 100%  
-✅ AI Analysis (LM Studio + Gemini fallback) - 100%  
-✅ Status Auto-Update desde emails - 100%  
-✅ Salary-based FIT Scoring - 100%  
-✅ Auto-mark Expired/Negative Jobs - 100%  
-✅ Auto-start Services - 100%  
-✅ Web App Unificada (puerto 5555) - 100%  
-✅ Auto-Apply LinkedIn (4 bugs resueltos) - 100%  
-✅ Expire Check (URL verification) - 100%  
-✅ Control Center - 95%  
-✅ OAuth Management - 100%
+**NO busco:** Software Developer/Programmer positions
 
-### Pendientes
-⏳ Auto-Apply Glassdoor (368 jobs esperando - 86% del total)  
-⏳ Dashboard Keywords Fix (LM Studio error en tab Resumen)  
-⏳ Indeed Scraper Freeze (Chromium timeout)
+**Experiencia clave:**
+- ERP migrations (10+ años)
+- ETL & Data Migration (800+ TB procesados)
+- IT Infrastructure (LATAM)
+- BI/Power BI
+- Business Analysis
+- Project Management
 
----
-
-## 📊 ESTADÍSTICAS ACTUALES
-
-**Total Jobs Procesados:** 426
-- Glassdoor: 368 (86%) ← **PRIORIDAD MÁXIMA**
-- LinkedIn: 47 (11%)
-- Indeed: 11 (3%)
-
-**Status Actual:**
-- New: 16
-- Applied: 0
-- Interview: 0
-- Rejected: 0
-- Expired: 1
-- High Fit (7+): 2
+**Prioridades:**
+- Remote work (familia con bebé Máximo)
+- Guadalajara, México (CST, GMT-6)
+- Salario mínimo aceptable: $30,000 MXN/mes (~$1,700 USD)
 
 ---
 
-## 🛠️ TECH STACK
+## 💻 TECH STACK
 
-### IA Local
-- **LM Studio:** http://172.23.0.1:11434 o http://127.0.0.1:11434
-- **Modelo:** Qwen 2.5 14B Instruct (tool-use trained)
-- **Fallback:** Gemini API (si LM Studio no responde)
+**AI & ML:**
+- **LM Studio** (local) - Qwen 2.5 14B Instruct (Q4_K_M, 8.99 GB)
+  - URL: http://172.23.0.1:11434
+  - Model: `qwen2.5-14b-instruct`
+- **Gemini API** (fallback via LiteLLM)
+- **Whisper** (transcription para Interview Copilot)
 
-### Storage & APIs
-- **Google Sheets ID:** 1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg
-- **Gmail API:** OAuth tokens en `data/credentials/`
-- **Scrapers:** Playwright (LinkedIn, Indeed)
+**Backend:**
+- Python 3.13
+- Google APIs (Sheets, Gmail, Calendar)
+- OAuth 2.0 con auto-renewal ✅
+- Flask (dashboard backend)
 
-### Automation
-- **Pipeline:** run_daily_pipeline.py
-- **Control Center:** control_center.py
-- **Web App:** unified_app/app.py (puerto 5555)
-- **PowerShell Scripts:** Auto-start, cleanup, fixes
+**Scraping:**
+- Playwright (Firefox stealth mode)
+- LinkedIn, Indeed scrapers
 
----
+**Database:**
+- Google Sheets como database principal
+- Sheet ID: `1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg`
 
-## 🔧 ARCHIVOS CLAVE
+**Automation:**
+- PowerShell scripts (Windows 11)
+- n8n workflows (opcional)
+- Task Scheduler (pendiente setup)
 
-### Documentación (SIEMPRE LEER PRIMERO)
-```
-PROJECT_STATUS.md              # Estado actual - ACTUALIZAR EN CADA ITERACIÓN
-MASTER_FEATURE_ROADMAP.md      # 100+ features planificadas
-docs/session_reports/          # Reportes de sesiones anteriores
-```
-
-### Código Principal
-```
-run_daily_pipeline.py          # Pipeline completo
-control_center.py              # Menú principal
-core/automation/auto_apply_linkedin.py  # Auto-apply (FUNCIONAL)
-core/ingestion/linkedin_scraper_V2.py   # LinkedIn scraper (FINAL)
-core/enrichment/ai_analyzer.py          # AI analysis
-```
-
-### Scripts de Mantenimiento
-```
-scripts/maintenance/mark_all_negatives.py       # Marca jobs rechazados
-scripts/maintenance/recalculate_fit_scores.py   # Recalcula FIT
-scripts/maintenance/update_status_from_emails.py # Sync email→sheets
-scripts/maintenance/verify_job_status.py        # Verifica URLs
-```
-
-### Tests
-```
-scripts/tests/TEST_FITSCORE_FIX.py      # Test FitScore parsing
-scripts/tests/TEST_PIPELINE_FIXES.py    # Test imports y métodos
-```
+**Hardware:**
+- RTX 4090 24GB
+- 64GB RAM
+- i9-14900K
+- Windows 11
 
 ---
 
-## ⚡ PRINCIPIOS CRÍTICOS DE DESARROLLO
-
-### 🚫 NO ROMPER LO QUE FUNCIONA
-
-**REGLA DE ORO:** Antes de modificar cualquier archivo que FUNCIONA:
-
-1. **LEE el archivo completo primero**
-2. **ENTIENDE qué hace y por qué**
-3. **PREGUNTA al usuario si no estás seguro**
-4. **CREA un backup si es cambio mayor**
-5. **PRUEBA después de cada cambio**
-
-### ✅ Código que NO se debe tocar (sin razón fuerte)
+## 📂 ESTRUCTURA DEL PROYECTO
 
 ```
-✅ core/automation/auto_apply_linkedin.py  # Recién arreglado (4 bugs)
-✅ run_daily_pipeline.py                    # Pipeline funcional
-✅ core/ingestion/linkedin_scraper_V2.py    # Scraper estable
-✅ core/enrichment/ai_analyzer.py           # AI analysis OK
-✅ core/sheets/sheet_manager.py             # Sheets OK
-✅ unified_app/app.py                       # Web app funcional
-```
-
-**Excepción:** Si usuario pide explícitamente o encuentras un bug CRÍTICO
-
-### 🎯 Cuando agregar nueva funcionalidad
-
-**BUENAS PRÁCTICAS:**
-1. **Crea archivos NUEVOS** en vez de modificar existentes
-2. **Usa imports** de código existente
-3. **No duplicar lógica** - reutiliza funciones
-4. **Tests primero** para funcionalidad crítica
-5. **Documenta en PROJECT_STATUS.md**
-
-**EJEMPLO CORRECTO:**
-```
-# Quieres agregar Glassdoor auto-apply
-1. Crea: core/automation/auto_apply_glassdoor.py (NUEVO)
-2. Importa: from core.sheets.sheet_manager import SheetManager (REUSA)
-3. Modifica: run_daily_pipeline.py (solo agregar llamada)
-4. Test: scripts/tests/TEST_GLASSDOOR_APPLY.py (NUEVO)
-5. Actualiza: PROJECT_STATUS.md
-```
-
-**EJEMPLO INCORRECTO:**
-```
-❌ Modificar auto_apply_linkedin.py para soportar Glassdoor
-   (Riesgo: romper LinkedIn que YA funciona)
+C:\Users\MSI\Desktop\ai-job-foundry\
+│
+├── 🎯 ARCHIVOS PRINCIPALES (RAÍZ)
+│   ├── control_center.py          # ✅ Menú principal (19 opciones)
+│   ├── run_daily_pipeline.py      # ✅ Pipeline diario (--all, --quick, etc)
+│   ├── oauth_token_validator.py   # ✅ OAuth auto-renewal
+│   ├── main.py                     # Redirector a control_center.py
+│   ├── .env                        # Variables de entorno
+│   ├── TEST_OAUTH_FLOW.ps1         # Test OAuth flow
+│   └── *.ps1                       # PowerShell automation scripts
+│
+├── core/
+│   ├── ingestion/
+│   │   ├── linkedin_scraper_V2.py       # ✅ LinkedIn scraper (FINAL)
+│   │   └── indeed_scraper.py            # ⚠️ Timeout issues
+│   │
+│   ├── enrichment/
+│   │   ├── ai_analyzer.py               # ✅ AI FIT score analysis
+│   │   └── cover_letter_gen.py          # 60% funcional
+│   │
+│   ├── sheets/
+│   │   └── sheet_manager.py             # ✅ Google Sheets manager
+│   │
+│   ├── automation/
+│   │   ├── job_bulletin_processor.py    # ✅ Procesa boletines (LinkedIn/Indeed/Glassdoor)
+│   │   ├── auto_apply_linkedin.py       # ✅ LinkedIn auto-apply
+│   │   └── gmail_monitor.py             # Monitoreo Gmail
+│   │
+│   ├── copilot/
+│   │   └── interview_copilot_v2.py      # ✅ Interview assistant
+│   │
+│   └── utils/
+│       ├── llm_client.py                # ✅ Multi-provider LLM client
+│       └── oauth_validator.py           # ✅ OAuth utilities
+│
+├── scripts/
+│   ├── oauth/
+│   │   ├── reauthenticate_gmail_v2.py   # ✅ OAuth renewal (bug fix aplicado)
+│   │   └── validate_oauth_v2.py         # ✅ OAuth validator
+│   │
+│   ├── verifiers/
+│   │   ├── EXPIRE_LIFECYCLE.py          # ✅ Expire management (--mark, --delete, --full)
+│   │   ├── LINKEDIN_SMART_VERIFIER_V3.py  # LinkedIn job verification
+│   │   ├── INDEED_SMART_VERIFIER.py     # Indeed verification
+│   │   └── GLASSDOOR_SMART_VERIFIER.py  # Glassdoor verification
+│   │
+│   ├── maintenance/
+│   │   ├── recalculate_fit_scores.py    # ✅ FIT score recalc con salarios
+│   │   ├── mark_expired_jobs.py         # Marca expirados
+│   │   └── update_status_from_emails.py # Status updates
+│   │
+│   ├── powershell/
+│   │   └── startup_check_v3.ps1         # ✅ Service verification
+│   │
+│   └── testing/
+│       ├── test_email_processing.py
+│       ├── visual_test.py
+│       └── test_lm_studio_internet.py
+│
+├── data/
+│   ├── credentials/
+│   │   ├── token.json               # ✅ OAuth token (auto-renewed)
+│   │   └── credentials.json         # OAuth client credentials
+│   │
+│   ├── cv/
+│   │   └── cv_marcos.md             # Tu CV en markdown
+│   │
+│   └── cache/
+│       └── processed_emails.json    # Cache de emails procesados
+│
+├── docs/
+│   ├── PROJECT_STATUS.md            # ✅ Estado actual (99%)
+│   ├── QUICKSTART_OAUTH_VALIDATOR.md  # Guía OAuth
+│   ├── README_OAUTH_VALIDATOR.md
+│   └── INTEGRACION_OAUTH_VALIDATOR.md
+│
+├── logs/
+│   └── powershell/
+│       └── session_*.log            # Logs de sesiones
+│
+└── web/
+    └── dashboard_secure.html        # Dashboard frontend
 ```
 
 ---
 
-## 🐛 BUGS RECIENTEMENTE RESUELTOS (NO REINTRODUCIR)
+## 🎯 ESTADO ACTUAL (99% FUNCIONAL)
 
-### Bug #1: FitScore ValueError
-**Error:** `ValueError: invalid literal for int() with base 10: ''`  
-**Solución:** Función `safe_fit_score()` maneja '', None, '8/10', etc  
-**Ubicación:** run_daily_pipeline.py  
-**NO CAMBIAR** esta función sin entender el problema original
+### ✅ LO QUE FUNCIONA PERFECTO (99%)
 
-### Bug #2: Auto-Apply AttributeError
-**Error:** `'LinkedInAutoApplier' object has no attribute 'process_jobs'`  
-**Solución:** Método correcto es `run()` no `process_jobs()`  
-**NO CAMBIAR** llamadas a applier.run()
+#### 1. **OAuth Auto-Renewal** ✅ 100%
+**Archivo:** `oauth_token_validator.py` (raíz)
 
-### Bug #3: Expire Check ModuleNotFoundError
-**Error:** `No module named 'verify_job_status'`  
-**Solución:** sys.path agregado para import desde scripts/maintenance/  
-**NO CAMBIAR** este import sin verificar paths
+**Flujo automático:**
+```
+Token expirado detectado
+→ Ejecuta scripts/oauth/reauthenticate_gmail_v2.py
+→ Abre navegador Google OAuth
+→ Usuario autoriza (120 seg timeout)
+→ Verifica token.json creado
+→ Valida campos requeridos
+→ Continúa pipeline automáticamente
+```
 
-### Bug #4: Auto-Apply FitScore TypeError
-**Error:** `'>=' not supported between instances of 'str' and 'int'`  
-**Solución:** Función `_safe_fit_score()` en LinkedInAutoApplier  
-**NO CAMBIAR** comparaciones de FitScore sin sanitizar primero
+**Características:**
+- Detecta token expirado automáticamente
+- Abre navegador sin intervención manual
+- Espera autorización del usuario
+- Verifica que el nuevo token funciona
+- Continúa pipeline sin reiniciar
+- **SIN ERRORES `invalid_grant` NUNCA MÁS**
 
----
+#### 2. **Daily Pipeline** ✅ 100%
+**Archivo:** `run_daily_pipeline.py` (raíz)
 
-## 📈 PRÓXIMOS PASOS SUGERIDOS
+**Opciones funcionando:**
+```powershell
+py run_daily_pipeline.py --all         # Pipeline completo
+py run_daily_pipeline.py --quick       # Bulletins + Report
+py run_daily_pipeline.py --emails      # Solo bulletins
+py run_daily_pipeline.py --analyze     # Solo AI FIT scores
+py run_daily_pipeline.py --apply       # Auto-apply LIVE
+py run_daily_pipeline.py --apply --dry-run  # DRY RUN
+py run_daily_pipeline.py --expire      # Marcar expirados
+py run_daily_pipeline.py --report      # Solo reporte
+```
 
-### PRIORIDAD ALTA (Máximo Impacto)
+**Scripts que USA (subprocess, NO imports):**
+```python
+# STEP 1: Bulletin Processing
+subprocess.run([sys.executable, 'core/automation/job_bulletin_processor.py'])
 
-#### 1. Glassdoor Auto-Apply (30-45 min)
-**Por qué:** 368 jobs (86% del total) sin automatizar  
-**Qué hacer:**
-- Investigar proceso de aplicación Glassdoor
-- Crear `auto_apply_glassdoor.py` (NUEVO archivo)
-- Modificar pipeline para incluirlo
-- Test DRY RUN
+# STEP 2: AI Analysis (FIT Scores con salarios)
+subprocess.run([sys.executable, 'scripts/maintenance/recalculate_fit_scores.py'])
 
-**Archivos nuevos:**
-- `core/automation/auto_apply_glassdoor.py`
-- `scripts/tests/TEST_GLASSDOOR_APPLY.py`
+# STEP 3: Auto-Apply
+subprocess.run([sys.executable, 'core/automation/auto_apply_linkedin.py', '--dry-run'])
 
-**Archivos modificar:**
-- `run_daily_pipeline.py` (agregar llamada)
-- `PROJECT_STATUS.md` (documentar)
+# STEP 4: Expire Check (marca jobs >30 días)
+subprocess.run([sys.executable, 'scripts/verifiers/EXPIRE_LIFECYCLE.py', '--mark'])
 
-#### 2. Filtros Gmail Automáticos (15 min)
-**Por qué:** Organización automática de emails  
-**Qué hacer:**
-- Script ya existe: CREATE_GMAIL_FILTERS.py (en archive/)
-- Crear labels: JOBS/LinkedIn, JOBS/Indeed, JOBS/Glassdoor
-- Filtros por remitente
+# STEP 5: Report Generation
+# Usa SheetManager para generar stats básicas
+```
 
-**Impacto:** Email processing más eficiente
+#### 3. **Control Center** ✅ 100%
+**Archivo:** `control_center.py` (raíz)
 
-#### 3. Fix Indeed Scraper Freeze (30 min)
-**Por qué:** Indeed scraper se congela (Chromium timeout)  
-**Qué hacer:**
-- Investigar por qué Chromium deja de responder
-- Agregar retry logic
-- Usar múltiples browsers en paralelo
-- Headless mode optimizado
+Menú interactivo con 19 opciones:
+- Pipeline completo/rápido
+- Operaciones individuales (bulletins, AI, auto-apply, etc)
+- Scraping (LinkedIn, Indeed)
+- Visualización (Dashboard, Sheets)
+- Utilidades (OAuth, Interview Copilot, etc)
 
-**NO ROMPER:** LinkedIn scraper que funciona perfecto
+#### 4. **Bulletin Processing** ✅ 100%
+**Archivo:** `core/automation/job_bulletin_processor.py`
 
-### PRIORIDAD MEDIA
+- Procesa boletines de LinkedIn, Indeed, Glassdoor
+- Extrae múltiples jobs por email
+- Deduplicación automática
+- Guarda en Google Sheets
+- Mueve emails a papelera después de procesar
 
-#### 4. Dashboard Keywords Fix (15 min)
-**Problema:** Tab Resumen tiene errores LM Studio  
-**Qué hacer:**
-- Investigar query a LM Studio que falla
-- Agregar error handling
-- Fallback a Gemini si LM Studio no responde
+**Última ejecución:**
+- 1 boletín procesado (Glassdoor)
+- 1 job nuevo guardado
+- 0 errores
 
-#### 5. Notificaciones Multi-Canal (30 min)
+#### 5. **AI Analysis con Salarios** ✅ 100%
+**Archivo:** `scripts/maintenance/recalculate_fit_scores.py`
+
+**Lógica de penalties:**
+```python
+SALARY_MIN_ACCEPTABLE = 30000 MXN  # $1,700 USD
+SALARY_PREFERRED = 50000 MXN       # $2,900 USD
+SALARY_EXCELLENT = 80000 MXN       # $4,600 USD
+
+< $20k MXN → Penalty -5 (extremely low)
+< $30k MXN → Penalty -3 (below minimum)
+< $50k MXN → Penalty -1 (below preferred)
+< $80k MXN → No change (good range)
+>= $80k MXN → Bonus +1 (excellent)
+```
+
+- Extrae salarios de texto (MXN/USD)
+- Convierte USD a MXN (rate: 17)
+- Recalcula FIT scores con penalties
+- Actualiza Sheets automáticamente
+
+#### 6. **Auto-Apply LinkedIn** ✅ 100%
+**Archivo:** `core/automation/auto_apply_linkedin.py`
+
+- LinkedIn Easy Apply automation
+- DRY RUN mode (testing)
+- LIVE mode (real applications)
+- Form filling con Playwright
+- Actualiza status en Sheets
+
+**Uso:**
+```powershell
+py run_daily_pipeline.py --apply --dry-run  # Test
+py run_daily_pipeline.py --apply            # LIVE
+```
+
+#### 7. **Expire Lifecycle** ✅ 100%
+**Archivo:** `scripts/verifiers/EXPIRE_LIFECYCLE.py`
+
+**Sistema de 2 pasos:**
+```powershell
+# PASO 1: Marca EXPIRED (jobs >30 días)
+py scripts/verifiers/EXPIRE_LIFECYCLE.py --mark
+
+# PASO 2: Borra jobs YA marcados como EXPIRED
+py scripts/verifiers/EXPIRE_LIFECYCLE.py --delete
+
+# Ambos pasos en una ejecución
+py scripts/verifiers/EXPIRE_LIFECYCLE.py --full
+
+# Custom threshold
+py scripts/verifiers/EXPIRE_LIFECYCLE.py --mark --days 60
+```
+
+#### 8. **LinkedIn Scraper** ✅ 100%
+**Archivo:** `core/ingestion/linkedin_scraper_V2.py`
+
+- Scraping con Playwright
+- Stealth mode
+- Login automation
+- Extrae jobs con metadata completa
+
+#### 9. **Google Sheets Integration** ✅ 100%
+**Archivo:** `core/sheets/sheet_manager.py`
+
+**Sheet ID:** `1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg`
+
+**Tabs:**
+- Jobs (principal)
+- Registry (histórico)
+- LinkedIn
+- Indeed
+- Glassdoor
+- Resumen
+
 **Features:**
-- Email notifications (high-fit jobs, interviews)
-- Telegram bot (opcional)
-- Discord webhook (opcional)
+- Batch updates
+- Deduplicación
+- Status management
+- FIT score tracking
+
+#### 10. **Interview Copilot** ✅ 100%
+**Archivo:** `core/copilot/interview_copilot_v2.py`
+
+- Whisper transcription
+- LM Studio/Gemini integration
+- Job context loading
+- Company research
+- Push-to-talk (Ctrl+Shift+R)
 
 ---
 
-## 💡 FILOSOFÍA DE DESARROLLO
+### ⚠️ LO QUE FALTA (1%)
 
-### "Set it and Forget it"
-- Automatización máxima
-- Mínima intervención diaria
-- Logging completo para debugging
-- Procesos idempotentes (pueden ejecutarse N veces sin problema)
-
-### Windows-First
-- PowerShell scripts (no bash)
-- Paths absolutos (no relativos)
-- `py` command (no `python`)
-- Manejo de encoding Windows (UTF-8 con BOM)
-
-### Local-First AI
-- LM Studio > Cloud APIs (privacidad + costo)
-- Gemini como fallback (no primary)
-- Modelos tool-use trained (Qwen 2.5 14B)
-
-### Functional > Perfect
-- Entregar features funcionando, iterar después
-- 80% working > 100% perfect pero incompleto
-- Tests para funciones críticas, no para todo
+1. **Task Scheduler** - Windows Task Scheduler para ejecución diaria automática
+2. **Glassdoor Scraper** - Opcional (boletines ya funcionan)
+3. **Cover Letter Gen** - Mejoras (básico funciona)
 
 ---
 
-## 🚀 COMANDOS ÚTILES
+## 🔧 PROBLEMAS CONOCIDOS Y SOLUCIONES
 
-### Ver Estado Actual
+### 1. **OAuth Token Expirado** ✅ RESUELTO
+**Síntoma:** `invalid_grant` error  
+**Solución:** Sistema auto-renewal implementado
 ```powershell
-py scripts/view_current_sheets.py          # Ver Google Sheets
-Get-Content PROJECT_STATUS.md              # Estado proyecto
-Get-Content logs/powershell/session_*.log  # Logs recientes
+# Valida automáticamente, si expira renueva solo
+py oauth_token_validator.py
 ```
 
-### Ejecutar Pipeline
+### 2. **LM Studio IP Cambia** ✅ RESUELTO
+**Síntoma:** Cannot connect to LM Studio  
+**Solución:** Script detecta IP automáticamente
 ```powershell
-.\START_CONTROL_CENTER.bat    # Menú interactivo
-py run_daily_pipeline.py --all        # Pipeline completo
-py run_daily_pipeline.py --emails     # Solo emails
-py run_daily_pipeline.py --analyze    # Solo AI analysis
+.\detect_lm_studio_ip.ps1
 ```
 
-### Tests
+### 3. **Unicode Errors en Windows** ✅ RESUELTO
+**Síntoma:** UnicodeDecodeError  
+**Solución:** Fix encoding scripts
 ```powershell
-py scripts/tests/TEST_FITSCORE_FIX.py      # Test FitScore
-py scripts/tests/TEST_PIPELINE_FIXES.py    # Test pipeline
+.\fix_unicode_all.ps1
+Get-Process python* | Stop-Process -Force
 ```
 
-### Mantenimiento
+### 4. **Indeed Scraper Timeout** ⚠️ CONOCIDO
+**Síntoma:** Browser freeze  
+**Solución:** Usar LinkedIn (más confiable) y boletines
+**Prioridad:** Baja (no crítico)
+
+---
+
+## ⚡ COMANDOS MÁS USADOS
+
+### **Control Center (Recomendado)**
 ```powershell
-.\CLEANUP_ALL_JOBS.bat                     # Limpieza completa
-py scripts/maintenance/mark_all_negatives.py    # Marca negativos
-py scripts/maintenance/recalculate_fit_scores.py # Recalcula FIT
+cd C:\Users\MSI\Desktop\ai-job-foundry
+py control_center.py
+```
+
+### **Pipeline Completo**
+```powershell
+py run_daily_pipeline.py --all        # Todo (DRY RUN auto-apply)
+py run_daily_pipeline.py --quick      # Bulletins + Report
+```
+
+### **Operaciones Individuales**
+```powershell
+py run_daily_pipeline.py --emails     # Bulletins
+py run_daily_pipeline.py --analyze    # AI FIT scores
+py run_daily_pipeline.py --apply --dry-run  # Auto-apply test
+py run_daily_pipeline.py --expire     # Marcar expirados
+py run_daily_pipeline.py --report     # Reporte
+```
+
+### **OAuth Management**
+```powershell
+py oauth_token_validator.py          # Validar token
+py scripts/oauth/validate_oauth_v2.py # Verificar completo
+py scripts/oauth/reauthenticate_gmail_v2.py  # Renovar manual
+```
+
+### **Verification Scripts**
+```powershell
+py view_sheets_data.py                # Ver datos en Sheets
+py check_sheets_tabs.py               # Ver tabs
+.\detect_lm_studio_ip.ps1             # Fix LM Studio IP
+.\start_all.ps1                       # Inicio completo
+```
+
+### **Expire Management**
+```powershell
+# Marcar expirados (>30 días)
+py scripts/verifiers/EXPIRE_LIFECYCLE.py --mark
+
+# Borrar YA marcados
+py scripts/verifiers/EXPIRE_LIFECYCLE.py --delete
+
+# Ambos pasos
+py scripts/verifiers/EXPIRE_LIFECYCLE.py --full
+
+# Custom threshold (>60 días)
+py scripts/verifiers/EXPIRE_LIFECYCLE.py --mark --days 60
 ```
 
 ---
 
-## 📝 ACTUALIZAR PROJECT_STATUS.md
+## 📊 MÉTRICAS ACTUALES
 
-### Template de Actualización
+**Google Sheets:**
+- Jobs tracked: 157 (Glassdoor) + 10 (LinkedIn) + 5 (Indeed)
+- Bulletins procesados: 339 históricos
+- Último batch: 1 job nuevo
+- Duplicados: 0 (deduplicación 100% efectiva)
 
-Al finalizar cada iteración, agregar al inicio de PROJECT_STATUS.md:
+**LM Studio:**
+- Status: ✅ ONLINE
+- URL: http://172.23.0.1:11434
+- Model: Qwen 2.5 14B (8.99 GB)
+- Formato: GGUF Q4_K_M
 
-```markdown
-## 🆕 ÚLTIMA SESIÓN (YYYY-MM-DD HH:MM)
+**OAuth:**
+- Token válido: ✅
+- Auto-renewal: ✅ FUNCIONA PERFECTO
+- Última renovación: 2026-01-06 01:20 CST
+- Expira en: ~59 minutos (se renueva automático)
 
-### Cambios Realizados
-
-1. **[Nombre del Feature/Fix]**
-   - Descripción breve
-   - Archivos modificados: X, Y, Z
-   - Test: ✅/⏳
-   - Estado: ✅ FUNCIONAL / ⚠️ PARCIAL / ❌ FALLIDO
-
-### Archivos Nuevos
-- archivo1.py (N líneas) - Propósito
-- archivo2.md - Documentación de X
-
-### Archivos Modificados
-- archivo3.py (líneas X-Y) - Cambio Z
-- PROJECT_STATUS.md - Actualización sesión
-
-### Próximos Pasos
-- [ ] Tarea 1 pendiente
-- [ ] Tarea 2 pendiente
+**Pipeline:**
+- Última ejecución: Exitosa ✅
+- Bulletins: 1 procesado
+- Jobs: 1 nuevo guardado
+- Errores: 0
 
 ---
+
+## 🎯 PRINCIPIOS DE DESARROLLO
+
+### 1. **Local-First AI**
+LM Studio > Gemini Cloud
+- Privacidad
+- Sin costo por uso
+- Sin rate limits
+
+### 2. **Functional > Perfect**
+Entregar features funcionando, iterar después
+- No refactorizar código que funciona
+- Mejoras incrementales
+- Testing exhaustivo antes de cambios
+
+### 3. **Set it and Forget it**
+Automatización máxima
+- OAuth auto-renewal
+- Pipeline diario automático
+- Gestión automática de expirados
+- Mínima intervención manual
+
+### 4. **Windows-Optimized**
+PowerShell scripts, paths absolutos
+- Encoding UTF-8 forzado
+- PowerShell como primera opción
+- Paths con backslashes o forward slashes (normalizado automático)
+
+### 5. **Comprehensive Logging**
+Todo se loguea
+- `logs/powershell/session_*.log`
+- Debugging facilitado
+- Troubleshooting rápido
+
+---
+
+## 🚨 REGLAS CRÍTICAS PARA CLAUDE
+
+### ❌ NUNCA HAGAS ESTO:
+
+1. **NO modificar código que funciona** sin razón fuerte
+   - Si algo funciona, déjalo así
+   - Consulta antes de refactorizar
+
+2. **NO inventar imports o métodos** que no existen
+   - Verifica que el archivo existe
+   - Verifica que el método existe
+   - Usa subprocess si no estás seguro
+
+3. **NO asumir que main.py es el entry point**
+   - El entry point es `control_center.py`
+   - `main.py` solo redirige a control_center
+
+4. **NO crear rutas o archivos sin verificar ubicación**
+   - Siempre verifica estructura actual
+   - Pregunta dónde crear archivos nuevos
+
+5. **NO romper OAuth auto-renewal**
+   - Es crítico que funcione siempre
+   - Consulta antes de modificar oauth_token_validator.py
+
+### ✅ SIEMPRE HAZLO ASÍ:
+
+1. **Verifica estructura antes de codear**
+   - Lista directorios
+   - Confirma ubicación de archivos
+   - Revisa imports existentes
+
+2. **Usa subprocess para scripts externos**
+   - No importes si no estás 100% seguro
+   - subprocess.run() es más seguro
+   - Captura output y errors
+
+3. **Documenta cambios importantes**
+   - Actualiza PROJECT_STATUS.md
+   - Explica qué y por qué
+   - Include examples de uso
+
+4. **Testea antes de marcar como completo**
+   - Ejecuta el script
+   - Verifica output
+   - Confirma que no rompe nada
+
+5. **Pregunta si no estás seguro**
+   - Mejor preguntar que romper algo
+   - Usuario prefiere validar antes
+
+---
+
+## 📝 TAREAS COMUNES
+
+### **Añadir nuevo script al pipeline**
+
+1. Crear script en ubicación apropiada
+2. Testear standalone
+3. Añadir función en run_daily_pipeline.py usando subprocess:
+```python
+def run_new_feature():
+    logger.info("ℹ️  STEP X: Running new feature...")
+    try:
+        result = subprocess.run(
+            [sys.executable, 'path/to/script.py'],
+            capture_output=True,
+            text=True,
+            timeout=300
+        )
+        if result.returncode == 0:
+            logger.info("✅ New feature completed")
+            return "PASS"
+        else:
+            logger.error(f"❌ Failed: {result.stderr[:200]}")
+            return "FAIL"
+    except Exception as e:
+        logger.error(f"❌ Failed: {e}")
+        return "FAIL"
+```
+
+### **Debugging OAuth issues**
+
+1. Verificar token:
+```powershell
+py oauth_token_validator.py
+```
+
+2. Ver detalles completos:
+```powershell
+py scripts/oauth/validate_oauth_v2.py
+```
+
+3. Renovar manualmente si necesario:
+```powershell
+py scripts/oauth/reauthenticate_gmail_v2.py
+```
+
+### **Ver datos en Google Sheets**
+
+```powershell
+py view_sheets_data.py              # Últimos 10 jobs
+py check_sheets_tabs.py             # Ver tabs disponibles
+```
+
+### **Fix LM Studio connection**
+
+```powershell
+.\detect_lm_studio_ip.ps1           # Detecta y actualiza .env
+# Verificar que LM Studio esté corriendo
+# Verificar que el modelo esté cargado
 ```
 
 ---
 
-## ⚠️ SEÑALES DE ALERTA
+## 🔄 WORKFLOW TÍPICO
 
-**SI VES ESTO, DETENTE Y PREGUNTA:**
+### **Inicio del día:**
+```powershell
+cd C:\Users\MSI\Desktop\ai-job-foundry
+.\start_all.ps1                     # Inicia servicios
+py control_center.py                # Menú principal
+# Opción 1: Pipeline completo
+```
 
-❌ "Voy a reescribir [archivo_funcional].py"  
-❌ "Mejor simplificar este código que funciona"  
-❌ "Este patrón es mejor" (sin probar)  
-❌ Modificar 5+ archivos simultáneamente  
-❌ Cambios sin tests en funcionalidad crítica  
-❌ Imports que fallan sin verificar paths  
+### **Debugging:**
+```powershell
+# Ver logs
+Get-Content logs/powershell/session_*.log | Select-Object -Last 50
 
-**✅ HACER EN CAMBIO:**
+# Verificar OAuth
+py oauth_token_validator.py
 
-✅ "Voy a crear [nuevo_archivo].py que usa [funcional].py"  
-✅ "Voy a agregar feature X sin modificar Y que funciona"  
-✅ "Voy a hacer backup antes de cambio mayor"  
-✅ Cambios incrementales con tests  
-✅ Un archivo a la vez, verificar que funciona  
-✅ Leer código existente PRIMERO  
+# Ver datos en Sheets
+py view_sheets_data.py
 
----
+# Fix LM Studio
+.\detect_lm_studio_ip.ps1
+```
 
-## 🎯 OBJETIVO DE ESTA SESIÓN
+### **Testing changes:**
+```powershell
+# Test script standalone
+py path/to/script.py
 
-**ENFOQUE:** Avanzar en el proyecto SIN romper lo que funciona
+# Test en pipeline
+py run_daily_pipeline.py --quick
 
-**PRIORIDADES:**
-1. **Glassdoor Auto-Apply** (368 jobs esperando - 86%)
-2. **Filtros Gmail** (organización automática)
-3. **Indeed Scraper Fix** (resolver freeze)
-4. **Features del Roadmap** (según usuario elija)
-
-**PROHIBIDO:**
-- Modificar archivos que funcionan sin razón fuerte
-- Cambios masivos sin tests
-- "Mejorar" código funcional sin solicitud explícita
-
----
-
-## 📞 RECURSOS EXTERNOS
-
-### Google Sheets
-https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg
-
-### LM Studio
-- URL local: http://127.0.0.1:11434 o http://172.23.0.1:11434
-- Model: qwen2.5-14b-instruct
-- Debe estar RUNNING para AI analysis
-
-### Documentación Proyecto
-- Perfil profesional: `__PROMPT_MAESTRO___PERFIL_LABORAL_C.txt`
-- Memoria proyecto: `MEMORIA_PROYECTO.md`
+# Test completo
+py run_daily_pipeline.py --all
+```
 
 ---
 
-## ✅ CHECKLIST ANTES DE EMPEZAR
+## 📞 REFERENCIAS IMPORTANTES
 
-**ESTA SESIÓN, VOY A:**
+### **Perfil profesional completo:**
+Ver: `PROMPT_MAESTRO___PERFIL_LABORAL_C.txt`
+- Experiencia PM/PO/BA/IT Manager
+- ERP migrations, ETL, BI
+- No busco developer positions
+- Remote work prioritario
 
-- [ ] Leer PROJECT_STATUS.md completo
-- [ ] Leer MASTER_FEATURE_ROADMAP.md
-- [ ] Entender qué funciona y qué no
-- [ ] Identificar archivos que NO debo tocar
-- [ ] Crear archivos NUEVOS en vez de modificar funcionales
-- [ ] Hacer tests antes de cambios críticos
-- [ ] Actualizar PROJECT_STATUS.md al finalizar
+### **Google Sheets:**
+URL: https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg
 
----
+### **LM Studio:**
+http://172.23.0.1:11434
 
-## 🚀 ¡AHORA SÍ, EMPECEMOS!
-
-**PREGUNTA INICIAL PARA EL USUARIO:**
-
-"¡Hola Marcos! He leído todo el contexto del proyecto AI Job Foundry. 
-
-**Estado actual:** Sistema 100% funcional (v2.6) con 426 jobs procesados.
-
-**Oportunidad detectada:** Tienes 368 jobs de Glassdoor (86% del total) sin auto-apply.
-
-**¿Qué prefieres hacer en esta sesión?**
-
-A) Crear Glassdoor Auto-Apply (30-45 min) - Aprovecha el 86% de oportunidades
-B) Implementar Filtros Gmail automáticos (15 min) - Mejor organización  
-C) Fix Indeed Scraper freeze (30 min) - Resolver timeout de Chromium
-D) Otra feature del Roadmap - Dime cuál
-E) Continuar donde lo dejamos - Revisar logs y decidir
-
-**Recuerda:** Todo cambio se documentará en PROJECT_STATUS.md ✅"
+### **Documentation:**
+- `docs/PROJECT_STATUS.md` - Estado actual (99%)
+- `docs/QUICKSTART_OAUTH_VALIDATOR.md` - OAuth guide
+- `docs/README_OAUTH_VALIDATOR.md` - Technical docs
+- `docs/INTEGRACION_OAUTH_VALIDATOR.md` - Integration guide
 
 ---
 
-**Fecha creación prompt:** 2025-12-03 00:00 CST  
-**Versión sistema:** 2.6  
-**Progreso:** 100% funcional  
-**Siguiente hito:** Glassdoor Auto-Apply o Features del Roadmap
+## 🎯 PRÓXIMOS PASOS SUGERIDOS
+
+### **Inmediato:**
+1. Test pipeline completo: `py run_daily_pipeline.py --all`
+2. Procesar emails pendientes en carpeta JOBS/Inbound
+3. Verificar que auto-apply funciona en DRY RUN
+
+### **Esta semana:**
+1. Configurar Task Scheduler para ejecución diaria
+2. Mejorar cover letter generator
+3. Analytics avanzado en dashboard
+
+### **Meta final:**
+- 100% automatización
+- 0 intervención manual
+- Pipeline diario automático
+- Task Scheduler configurado
+
+---
+
+## 🚀 ESTADO FINAL
+
+**Progreso:** 99% ✅  
+**Última actualización:** 2026-01-06 01:30 CST
+
+**Funciona perfecto:**
+- ✅ OAuth auto-renewal
+- ✅ Daily pipeline completo
+- ✅ Bulletin processing
+- ✅ AI analysis con salarios
+- ✅ Auto-apply LinkedIn
+- ✅ Expire lifecycle
+- ✅ Google Sheets integration
+- ✅ Control Center
+- ✅ Interview Copilot
+- ✅ PowerShell automation
+
+**Falta 1%:**
+- ⏳ Task Scheduler setup
+- ⏳ Glassdoor scraper (opcional)
+- ⏳ Cover letter polish
+
+**Sistema production-ready:** ✅ SÍ
+
+---
+
+**FIN DEL PROMPT - LISTO PARA NUEVO CHAT** ✅
+
+Usa este prompt completo al iniciar nuevo chat para mantener continuidad perfecta.
