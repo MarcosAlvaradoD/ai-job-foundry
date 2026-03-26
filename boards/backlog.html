@@ -1,0 +1,584 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>AI Job Foundry — Backlog</title>
+  <style>
+    :root {
+      --bg:       #0d1117;
+      --bg2:      #161b22;
+      --bg3:      #21262d;
+      --border:   #30363d;
+      --text:     #e6edf3;
+      --muted:    #8b949e;
+      --blue:     #58a6ff;
+      --green:    #3fb950;
+      --yellow:   #d29922;
+      --red:      #f85149;
+      --purple:   #bc8cff;
+      --orange:   #e3b341;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, sans-serif;
+      font-size: 14px;
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    header {
+      background: var(--bg2);
+      border-bottom: 1px solid var(--border);
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    header h1 { font-size: 18px; font-weight: 700; color: var(--blue); }
+    header .subtitle { color: var(--muted); font-size: 12px; }
+    .stats { margin-left: auto; display: flex; gap: 16px; }
+    .stat { text-align: center; }
+    .stat .num { font-size: 20px; font-weight: 700; }
+    .stat .lbl { font-size: 10px; color: var(--muted); text-transform: uppercase; }
+
+    /* ── Board ── */
+    .board {
+      display: flex;
+      gap: 12px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      min-height: calc(100vh - 70px);
+      align-items: flex-start;
+    }
+
+    /* ── Columnas ── */
+    .column {
+      width: 300px;
+      min-width: 260px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      flex-shrink: 0;
+    }
+    .col-header {
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 10px 10px 0 0;
+    }
+    .col-title { font-weight: 600; font-size: 13px; }
+    .col-count {
+      margin-left: auto;
+      background: var(--bg3);
+      color: var(--muted);
+      font-size: 11px;
+      border-radius: 10px;
+      padding: 1px 7px;
+    }
+    .col-dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    /* ── Cards ── */
+    .cards { padding: 10px; display: flex; flex-direction: column; gap: 8px; min-height: 60px; }
+    .card {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 12px;
+      cursor: grab;
+      transition: border-color .15s, box-shadow .15s;
+      position: relative;
+    }
+    .card:hover {
+      border-color: var(--blue);
+      box-shadow: 0 0 0 1px var(--blue)33;
+    }
+    .card.dragging { opacity: 0.5; }
+    .card.drag-over { border-color: var(--green); border-style: dashed; }
+
+    .card-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; line-height: 1.4; }
+    .card-desc  { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
+    .card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    /* ── Tags / Badges ── */
+    .tag {
+      font-size: 10px;
+      border-radius: 12px;
+      padding: 1px 7px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+    .tag-p0    { background: #f8514922; color: var(--red);    border: 1px solid #f8514944; }
+    .tag-p1    { background: #d2992222; color: var(--orange); border: 1px solid #d2992244; }
+    .tag-p2    { background: #58a6ff22; color: var(--blue);   border: 1px solid #58a6ff44; }
+    .tag-p3    { background: #30363d;   color: var(--muted);  border: 1px solid var(--border); }
+    .tag-scraping  { background: #3fb95022; color: var(--green);  border: 1px solid #3fb95044; }
+    .tag-copilot   { background: #bc8cff22; color: var(--purple); border: 1px solid #bc8cff44; }
+    .tag-sheets    { background: #58a6ff22; color: var(--blue);   border: 1px solid #58a6ff44; }
+    .tag-ai        { background: #e3b34122; color: var(--orange); border: 1px solid #e3b34144; }
+    .tag-ux        { background: #f7841022; color: #f78410;      border: 1px solid #f7841044; }
+    .tag-infra     { background: #8b949e22; color: var(--muted);  border: 1px solid var(--border); }
+    .tag-done  { background: #3fb95022; color: var(--green); border: 1px solid #3fb95044; }
+
+    .effort {
+      margin-left: auto;
+      font-size: 10px;
+      color: var(--muted);
+      background: var(--bg2);
+      border-radius: 4px;
+      padding: 1px 5px;
+    }
+
+    /* ── Add card btn ── */
+    .add-card-btn {
+      width: 100%;
+      margin-top: 4px;
+      padding: 7px;
+      background: transparent;
+      border: 1px dashed var(--border);
+      border-radius: 6px;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: 12px;
+      transition: all .15s;
+    }
+    .add-card-btn:hover { background: var(--bg3); color: var(--text); border-color: var(--blue); }
+
+    /* ── Modal de add/edit ── */
+    .overlay { display: none; position: fixed; inset: 0; background: #000a; z-index: 200; align-items: center; justify-content: center; }
+    .overlay.open { display: flex; }
+    .modal { background: var(--bg2); border: 1px solid var(--border); border-radius: 12px; padding: 24px; width: 480px; max-width: 95vw; }
+    .modal h2 { font-size: 16px; margin-bottom: 16px; color: var(--blue); }
+    .modal label { display: block; font-size: 12px; color: var(--muted); margin-bottom: 4px; margin-top: 12px; }
+    .modal input, .modal textarea, .modal select {
+      width: 100%; background: var(--bg3); border: 1px solid var(--border);
+      border-radius: 6px; color: var(--text); padding: 8px 10px; font-size: 13px; font-family: inherit;
+    }
+    .modal textarea { min-height: 80px; resize: vertical; }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+    .btn { padding: 7px 16px; border-radius: 6px; border: none; cursor: pointer; font-size: 13px; font-weight: 600; }
+    .btn-primary { background: var(--blue); color: #000; }
+    .btn-danger  { background: var(--red);  color: #fff; }
+    .btn-cancel  { background: var(--bg3);  color: var(--text); border: 1px solid var(--border); }
+    .btn:hover { opacity: .85; }
+
+    /* ── Filtros ── */
+    .filters { padding: 10px 20px 0; display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+    .filter-btn {
+      padding: 4px 12px; border-radius: 12px; border: 1px solid var(--border);
+      background: var(--bg3); color: var(--muted); cursor: pointer; font-size: 11px;
+      transition: all .15s;
+    }
+    .filter-btn:hover, .filter-btn.active { border-color: var(--blue); color: var(--blue); background: #58a6ff11; }
+
+    /* ── Drag placeholder ── */
+    .drop-placeholder {
+      height: 60px; border: 2px dashed var(--green); border-radius: 6px;
+      background: #3fb95011; display: none; margin: 4px 0;
+    }
+    .col-drop-active .drop-placeholder { display: block; }
+
+    /* ── Responsive ── */
+    @media (max-width: 600px) { .board { padding: 8px; } .column { width: 85vw; } }
+  </style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>🎯 AI Job Foundry — Backlog</h1>
+    <div class="subtitle">Kanban de desarrollo · Marcos Alvarado · 2026</div>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="num" id="stat-todo" style="color:var(--yellow)">0</div><div class="lbl">Por hacer</div></div>
+    <div class="stat"><div class="num" id="stat-doing" style="color:var(--blue)">0</div><div class="lbl">En progreso</div></div>
+    <div class="stat"><div class="num" id="stat-done" style="color:var(--green)">0</div><div class="lbl">Terminado</div></div>
+  </div>
+</header>
+
+<div class="filters">
+  <span style="font-size:11px;color:var(--muted);margin-right:4px">Filtrar:</span>
+  <button class="filter-btn active" onclick="filterCards('all', this)">Todos</button>
+  <button class="filter-btn" onclick="filterCards('scraping', this)">🕷️ Scraping</button>
+  <button class="filter-btn" onclick="filterCards('copilot', this)">🎤 Copilot</button>
+  <button class="filter-btn" onclick="filterCards('sheets', this)">📊 Sheets</button>
+  <button class="filter-btn" onclick="filterCards('ai', this)">🤖 AI</button>
+  <button class="filter-btn" onclick="filterCards('p0', this)">🔴 P0 Crítico</button>
+  <button class="filter-btn" onclick="filterCards('p1', this)">🟠 P1 Alto</button>
+</div>
+
+<div class="board" id="board">
+
+  <!-- ── BACKLOG ── -->
+  <div class="column" id="col-backlog" ondragover="onDragOver(event,'backlog')" ondrop="onDrop(event,'backlog')" ondragleave="onDragLeave(event)">
+    <div class="col-header">
+      <div class="col-dot" style="background:#8b949e"></div>
+      <span class="col-title">📋 Backlog</span>
+      <span class="col-count" id="cnt-backlog">0</span>
+    </div>
+    <div class="cards" id="cards-backlog">
+      <div class="drop-placeholder"></div>
+    </div>
+    <div style="padding:0 10px 10px">
+      <button class="add-card-btn" onclick="openModal('backlog')">+ Agregar tarea</button>
+    </div>
+  </div>
+
+  <!-- ── TODO ── -->
+  <div class="column" id="col-todo" ondragover="onDragOver(event,'todo')" ondrop="onDrop(event,'todo')" ondragleave="onDragLeave(event)">
+    <div class="col-header">
+      <div class="col-dot" style="background:var(--yellow)"></div>
+      <span class="col-title">🎯 Por Hacer</span>
+      <span class="col-count" id="cnt-todo">0</span>
+    </div>
+    <div class="cards" id="cards-todo">
+      <div class="drop-placeholder"></div>
+    </div>
+    <div style="padding:0 10px 10px">
+      <button class="add-card-btn" onclick="openModal('todo')">+ Agregar tarea</button>
+    </div>
+  </div>
+
+  <!-- ── IN PROGRESS ── -->
+  <div class="column" id="col-doing" ondragover="onDragOver(event,'doing')" ondrop="onDrop(event,'doing')" ondragleave="onDragLeave(event)">
+    <div class="col-header">
+      <div class="col-dot" style="background:var(--blue)"></div>
+      <span class="col-title">⚡ En Progreso</span>
+      <span class="col-count" id="cnt-doing">0</span>
+    </div>
+    <div class="cards" id="cards-doing">
+      <div class="drop-placeholder"></div>
+    </div>
+    <div style="padding:0 10px 10px">
+      <button class="add-card-btn" onclick="openModal('doing')">+ Agregar tarea</button>
+    </div>
+  </div>
+
+  <!-- ── DONE ── -->
+  <div class="column" id="col-done" ondragover="onDragOver(event,'done')" ondrop="onDrop(event,'done')" ondragleave="onDragLeave(event)">
+    <div class="col-header">
+      <div class="col-dot" style="background:var(--green)"></div>
+      <span class="col-title">✅ Terminado</span>
+      <span class="col-count" id="cnt-done">0</span>
+    </div>
+    <div class="cards" id="cards-done">
+      <div class="drop-placeholder"></div>
+    </div>
+    <div style="padding:0 10px 10px">
+      <button class="add-card-btn" onclick="openModal('done')">+ Agregar tarea</button>
+    </div>
+  </div>
+
+</div>
+
+<!-- ── MODAL ── -->
+<div class="overlay" id="modal-overlay">
+  <div class="modal">
+    <h2 id="modal-title">➕ Nueva tarea</h2>
+    <label>Título *</label>
+    <input id="f-title" type="text" placeholder="¿Qué hay que hacer?">
+    <label>Descripción</label>
+    <textarea id="f-desc" placeholder="Contexto, pasos, referencias..."></textarea>
+    <label>Columna</label>
+    <select id="f-col">
+      <option value="backlog">📋 Backlog</option>
+      <option value="todo">🎯 Por Hacer</option>
+      <option value="doing">⚡ En Progreso</option>
+      <option value="done">✅ Terminado</option>
+    </select>
+    <label>Prioridad</label>
+    <select id="f-priority">
+      <option value="p0">🔴 P0 — Crítico (bloquea)</option>
+      <option value="p1">🟠 P1 — Alto (urgente)</option>
+      <option value="p2" selected>🔵 P2 — Normal</option>
+      <option value="p3">⬜ P3 — Nice to have</option>
+    </select>
+    <label>Categoría</label>
+    <select id="f-cat">
+      <option value="scraping">🕷️ Scraping</option>
+      <option value="copilot">🎤 Copilot</option>
+      <option value="sheets">📊 Sheets</option>
+      <option value="ai">🤖 AI</option>
+      <option value="ux">🖥️ UX/Dashboard</option>
+      <option value="infra">⚙️ Infra</option>
+    </select>
+    <label>Esfuerzo</label>
+    <select id="f-effort">
+      <option value="XS">XS — 1-2h</option>
+      <option value="S">S — medio día</option>
+      <option value="M" selected>M — 1 día</option>
+      <option value="L">L — 2-3 días</option>
+      <option value="XL">XL — 1 semana+</option>
+    </select>
+    <input type="hidden" id="f-id">
+    <div class="modal-actions">
+      <button class="btn btn-danger" id="btn-delete" onclick="deleteCard()" style="display:none;margin-right:auto">🗑️ Eliminar</button>
+      <button class="btn btn-cancel" onclick="closeModal()">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveCard()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════
+//   DATOS INICIALES — BACKLOG COMPLETO DE AI JOB FOUNDRY
+// ═══════════════════════════════════════════════════════════════
+const INITIAL_CARDS = [
+  // ── CRÍTICO ──────────────────────────────────────────────
+  { id:'c1', col:'todo', title:'Fix auto-apply "No eligible jobs"', desc:'El pipeline reporta que no hay jobs elegibles aunque hay 9 en LinkedIn con FIT≥7. Revisar lógica de filtro de tab y detección de Easy Apply.', priority:'p0', cat:'scraping', effort:'S' },
+  { id:'c2', col:'todo', title:'Fix Glassdoor roles "Unknown" (309 jobs)', desc:'89% de jobs de Glassdoor tienen Role=Unknown porque los boletines solo traen URLs. Opciones: a) Scraping de URLs con Playwright, b) mejorar regex del parser de emails.', priority:'p0', cat:'scraping', effort:'L' },
+  { id:'c3', col:'todo', title:'Completar Interview Copilot — loop de sesión', desc:'interview_copilot_v2.py tiene TODO pendiente: implementar el loop completo de sesión con el nuevo system prompt + job context. El overlay ya está hecho, falta el flujo interactivo.', priority:'p0', cat:'copilot', effort:'M' },
+
+  // ── ALTA PRIORIDAD ────────────────────────────────────────
+  { id:'c4', col:'todo', title:'Copilot: captura de audio con Whisper', desc:'Implementar push-to-talk (Ctrl+Shift+R) en el overlay. Requiere: pip install openai-whisper pyaudio numpy. El modelo "base" de Whisper pesa ~1.4GB.', priority:'p1', cat:'copilot', effort:'M' },
+  { id:'c5', col:'todo', title:'Dashboard Resumen — fix keywords erróneos', desc:'La pestaña "Resumen" en Sheets muestra keywords de error LM Studio (llm, conexi, httpconnection). Filtrar solo keywords de job descriptions reales.', priority:'p1', cat:'sheets', effort:'XS' },
+  { id:'c6', col:'todo', title:'Procesar emails pendientes en Gmail (JOBS/Inbound)', desc:'Hay 50+ emails sin procesar en la carpeta JOBS/Inbound. Correr job_bulletin_processor.py y verificar nuevos jobs ingresados.', priority:'p1', cat:'scraping', effort:'XS' },
+  { id:'c7', col:'todo', title:'Completar FIT scores — jobs sin puntaje', desc:'Aún hay jobs sin FIT score en algunas pestañas. Correr: py scripts/maintenance/calculate_all_fit_scores_v2.py', priority:'p1', cat:'ai', effort:'XS' },
+  { id:'c8', col:'todo', title:'Fix Indeed scraper — browser freeze', desc:'El scraper de Indeed se congela porque Chromium deja de responder. No es timeout sino freeze. Necesita watchdog + restart del browser si no hay actividad en N segundos.', priority:'p1', cat:'scraping', effort:'M' },
+
+  // ── NORMAL ────────────────────────────────────────────────
+  { id:'c9', col:'backlog', title:'Nuevas fuentes: nodesk.co, weworkremotely.com', desc:'Agregar scrapers/parsers para: nodesk.co, weworkremotely.com, builtin.com, trulyremote.co — Configurar alertas de email y parsers.', priority:'p2', cat:'scraping', effort:'L' },
+  { id:'c10', col:'backlog', title:'Glassdoor auto-apply', desc:'Glassdoor tiene 300+ jobs pero no hay automatización de apply. Analizar si tienen Easy Apply o redirigen a empresa. Implementar con Playwright.', priority:'p2', cat:'scraping', effort:'XL' },
+  { id:'c11', col:'backlog', title:'Copilot: company research automático', desc:'generate_company_context() en interview_copilot_v2.py ya tiene el esqueleto. Conectar a LM Studio para generar resumen de la empresa antes de la entrevista.', priority:'p2', cat:'copilot', effort:'S' },
+  { id:'c12', col:'backlog', title:'Web dashboard — mejoras UI (Flask port 5555)', desc:'El dashboard de Flask existe pero necesita: lista de jobs filtrable, gráfico de FIT scores por fuente, botón de ejecutar pipeline desde UI.', priority:'p2', cat:'ux', effort:'L' },
+  { id:'c13', col:'backlog', title:'MCP integration con Claude Code', desc:'Claude Code VS Code extension configurado para Ollama (qwen2.5:7b velocidad, qwen3-coder:latest para tareas complejas). Verificar que funcione en sesiones de código.', priority:'p2', cat:'infra', effort:'S' },
+  { id:'c14', col:'backlog', title:'n8n workflows — automatización avanzada', desc:'Docker tiene n8n en localhost:5678. Crear workflows para: a) ejecutar pipeline diario, b) notificaciones push cuando hay job FIT>8, c) email summary diario.', priority:'p2', cat:'infra', effort:'L' },
+  { id:'c15', col:'backlog', title:'Auto-apply: LinkedIn AI local con EasyOCR', desc:'auto_apply_linkedin_ai_local.py usa EasyOCR + LM Studio para leer y llenar formularios complejos de LinkedIn Easy Apply. Testear y depurar.', priority:'p2', cat:'scraping', effort:'L' },
+  { id:'c16', col:'backlog', title:'Email processor — nuevas fuentes', desc:'Agregar parsers para: Adzuna, ZipRecruiter, self-forwarded LinkedIn jobs, Computrabajo mejorado.', priority:'p2', cat:'scraping', effort:'M' },
+
+  // ── NICE TO HAVE ──────────────────────────────────────────
+  { id:'c17', col:'backlog', title:'Copilot: exportar sesión como PDF/MD', desc:'Al final de la entrevista, generar un resumen en MD o PDF con: preguntas, respuestas usadas, puntos de mejora.', priority:'p3', cat:'copilot', effort:'S' },
+  { id:'c18', col:'backlog', title:'Cover letter generator automático', desc:'Para cada job con FIT≥7, generar cover letter personalizada usando CV + job description + LM Studio. Guardar en data/cover_letters/', priority:'p3', cat:'ai', effort:'M' },
+  { id:'c19', col:'backlog', title:'LinkedIn scraper: búsqueda activa (no solo alertas)', desc:'linkedin_search_scraper_v3.py para buscar activamente en LinkedIn Jobs por keywords y location. Más agresivo que solo procesar alertas de email.', priority:'p3', cat:'scraping', effort:'L' },
+  { id:'c20', col:'backlog', title:'Notificaciones push — Pushbullet', desc:'Cuando el pipeline encuentra job FIT≥8, enviar notificación push al celular. PUSHBULLET_API_KEY ya está en .env', priority:'p3', cat:'infra', effort:'XS' },
+  { id:'c21', col:'backlog', title:'Análisis de mercado — keywords trending', desc:'Extraer keywords más frecuentes de jobs FIT≥7 para entender qué busca el mercado. Mejorar sección "Resumen" del Sheets.', priority:'p3', cat:'ai', effort:'M' },
+  { id:'c22', col:'backlog', title:'Windows Task Scheduler — pipeline automático diario', desc:'Configurar tarea programada para correr run_daily_pipeline.py --quick cada día a las 7am. Scripts PowerShell ya existen en scripts/powershell/', priority:'p3', cat:'infra', effort:'S' },
+
+  // ── DONE ──────────────────────────────────────────────────
+  { id:'d1', col:'done', title:'LinkedIn scraper (Gmail bulletins)', desc:'Procesamiento de boletines de LinkedIn vía Gmail API. 100% funcional.', priority:'p0', cat:'scraping', effort:'L' },
+  { id:'d2', col:'done', title:'AI Analysis — FIT scores (LM Studio)', desc:'390/393 jobs tienen FIT score calculado con Qwen2.5 14B. Penalizaciones de salario aplicadas.', priority:'p0', cat:'ai', effort:'L' },
+  { id:'d3', col:'done', title:'Google Sheets integration', desc:'CRUD completo. Pestañas: LinkedIn, Glassdoor, Indeed, JobLeads, Computrabajo, Resumen.', priority:'p0', cat:'sheets', effort:'M' },
+  { id:'d4', col:'done', title:'OAuth auto-refresh', desc:'Token OAuth se refresca automáticamente. oauth_token_validator.py integrado en el pipeline.', priority:'p1', cat:'infra', effort:'S' },
+  { id:'d5', col:'done', title:'Auto-apply LinkedIn (v3 + session persistence)', desc:'linkedin_auto_apply.py con auto-login y sesión persistente. Funciona con --force flag.', priority:'p1', cat:'scraping', effort:'XL' },
+  { id:'d6', col:'done', title:'Interview Copilot Overlay INVISIBLE', desc:'core/copilot/interview_copilot_overlay.py — Ventana invisible en Zoom/Teams/Meet. WDA_EXCLUDEFROMCAPTURE activo. Conectado a LM Studio. Hotkeys.', priority:'p0', cat:'copilot', effort:'M' },
+  { id:'d7', col:'done', title:'Control Center — menú interactivo 17 opciones', desc:'control_center.py con menú completo. Smart verifiers, LinkedIn workflow, pipeline, análisis.', priority:'p2', cat:'ux', effort:'M' },
+  { id:'d8', col:'done', title:'Expiración automática de jobs', desc:'Jobs >30 días se marcan como Expired automáticamente. scripts/verifiers/EXPIRE_LIFECYCLE.py', priority:'p2', cat:'scraping', effort:'S' },
+];
+
+// ═══════════════════════════════════════════════════════════════
+//   STATE
+// ═══════════════════════════════════════════════════════════════
+let cards = [];
+let dragSrcId = null;
+let activeFilter = 'all';
+let editingId = null;
+
+const PRIORITY_LABELS = { p0:'P0', p1:'P1', p2:'P2', p3:'P3' };
+const CAT_LABELS = {
+  scraping:'🕷️ Scraping', copilot:'🎤 Copilot', sheets:'📊 Sheets',
+  ai:'🤖 AI', ux:'🖥️ UX', infra:'⚙️ Infra'
+};
+
+// ═══════════════════════════════════════════════════════════════
+//   INIT
+// ═══════════════════════════════════════════════════════════════
+function init() {
+  const saved = localStorage.getItem('ajf-backlog-v2');
+  cards = saved ? JSON.parse(saved) : [...INITIAL_CARDS];
+  renderAll();
+}
+
+function save() { localStorage.setItem('ajf-backlog-v2', JSON.stringify(cards)); }
+
+// ═══════════════════════════════════════════════════════════════
+//   RENDER
+// ═══════════════════════════════════════════════════════════════
+function renderAll() {
+  ['backlog','todo','doing','done'].forEach(col => {
+    const container = document.getElementById(`cards-${col}`);
+    const placeholder = container.querySelector('.drop-placeholder');
+    const filtered = cards.filter(c => c.col === col && matchFilter(c));
+
+    // Remove old cards (keep placeholder)
+    [...container.children].forEach(ch => {
+      if (!ch.classList.contains('drop-placeholder')) ch.remove();
+    });
+
+    filtered.forEach(c => {
+      const el = createCardEl(c);
+      container.appendChild(el);
+    });
+
+    // counts
+    const total = cards.filter(c => c.col === col).length;
+    document.getElementById(`cnt-${col}`).textContent = total;
+  });
+  updateStats();
+}
+
+function createCardEl(c) {
+  const div = document.createElement('div');
+  div.className = 'card';
+  div.draggable = true;
+  div.dataset.id = c.id;
+  div.innerHTML = `
+    <div class="card-title">${escHtml(c.title)}</div>
+    ${c.desc ? `<div class="card-desc">${escHtml(c.desc.slice(0,120))}${c.desc.length>120?'…':''}</div>` : ''}
+    <div class="card-footer">
+      <span class="tag tag-${c.priority}">${PRIORITY_LABELS[c.priority]}</span>
+      <span class="tag tag-${c.cat}">${CAT_LABELS[c.cat]||c.cat}</span>
+      <span class="effort">${c.effort}</span>
+    </div>
+  `;
+  div.addEventListener('dragstart', e => onDragStart(e, c.id));
+  div.addEventListener('dragend', onDragEnd);
+  div.addEventListener('dblclick', () => openModal(c.col, c.id));
+  return div;
+}
+
+function matchFilter(c) {
+  if (activeFilter === 'all') return true;
+  return c.priority === activeFilter || c.cat === activeFilter;
+}
+
+function updateStats() {
+  document.getElementById('stat-todo').textContent =
+    cards.filter(c => c.col === 'backlog' || c.col === 'todo').length;
+  document.getElementById('stat-doing').textContent =
+    cards.filter(c => c.col === 'doing').length;
+  document.getElementById('stat-done').textContent =
+    cards.filter(c => c.col === 'done').length;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   DRAG & DROP
+// ═══════════════════════════════════════════════════════════════
+function onDragStart(e, id) {
+  dragSrcId = id;
+  e.target.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+}
+function onDragEnd(e) { e.target.classList.remove('dragging'); }
+
+function onDragOver(e, col) {
+  e.preventDefault();
+  e.dataTransfer.dropEffect = 'move';
+  document.getElementById(`col-${col}`).classList.add('col-drop-active');
+}
+function onDragLeave(e) {
+  const col = e.currentTarget;
+  if (!col.contains(e.relatedTarget)) col.classList.remove('col-drop-active');
+}
+function onDrop(e, col) {
+  e.preventDefault();
+  document.getElementById(`col-${col}`).classList.remove('col-drop-active');
+  if (!dragSrcId) return;
+  const card = cards.find(c => c.id === dragSrcId);
+  if (card) { card.col = col; save(); renderAll(); }
+  dragSrcId = null;
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   MODAL
+// ═══════════════════════════════════════════════════════════════
+function openModal(col, id = null) {
+  editingId = id;
+  const overlay = document.getElementById('modal-overlay');
+  const title = document.getElementById('modal-title');
+  const btnDel = document.getElementById('btn-delete');
+
+  if (id) {
+    const c = cards.find(x => x.id === id);
+    title.textContent = '✏️ Editar tarea';
+    document.getElementById('f-title').value = c.title;
+    document.getElementById('f-desc').value = c.desc;
+    document.getElementById('f-col').value = c.col;
+    document.getElementById('f-priority').value = c.priority;
+    document.getElementById('f-cat').value = c.cat;
+    document.getElementById('f-effort').value = c.effort;
+    document.getElementById('f-id').value = id;
+    btnDel.style.display = 'inline-block';
+  } else {
+    title.textContent = '➕ Nueva tarea';
+    document.getElementById('f-title').value = '';
+    document.getElementById('f-desc').value = '';
+    document.getElementById('f-col').value = col;
+    document.getElementById('f-priority').value = 'p2';
+    document.getElementById('f-cat').value = 'scraping';
+    document.getElementById('f-effort').value = 'M';
+    document.getElementById('f-id').value = '';
+    btnDel.style.display = 'none';
+  }
+  overlay.classList.add('open');
+  document.getElementById('f-title').focus();
+}
+function closeModal() {
+  document.getElementById('modal-overlay').classList.remove('open');
+  editingId = null;
+}
+function saveCard() {
+  const title = document.getElementById('f-title').value.trim();
+  if (!title) { alert('El título es obligatorio'); return; }
+  const col      = document.getElementById('f-col').value;
+  const priority = document.getElementById('f-priority').value;
+  const cat      = document.getElementById('f-cat').value;
+  const effort   = document.getElementById('f-effort').value;
+  const desc     = document.getElementById('f-desc').value.trim();
+  const id       = document.getElementById('f-id').value;
+
+  if (id) {
+    const c = cards.find(x => x.id === id);
+    Object.assign(c, { title, desc, col, priority, cat, effort });
+  } else {
+    cards.push({ id: 'c' + Date.now(), title, desc, col, priority, cat, effort });
+  }
+  save(); renderAll(); closeModal();
+}
+function deleteCard() {
+  if (!editingId) return;
+  if (!confirm('¿Eliminar esta tarea?')) return;
+  cards = cards.filter(c => c.id !== editingId);
+  save(); renderAll(); closeModal();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   FILTROS
+// ═══════════════════════════════════════════════════════════════
+function filterCards(f, btn) {
+  activeFilter = f;
+  document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderAll();
+}
+
+// ═══════════════════════════════════════════════════════════════
+//   UTILS
+// ═══════════════════════════════════════════════════════════════
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Close modal on overlay click
+document.getElementById('modal-overlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modal-overlay')) closeModal();
+});
+// Keyboard
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+init();
+</script>
+</body>
+</html>

@@ -84,16 +84,30 @@ class LinkedInAutoApplier:
         for i, job in enumerate(linkedin_jobs, start=2):
             job['_row'] = i
         
+        # FIX 2026-03-26: El filtro 'linkedin.com/jobs' era demasiado estricto.
+        # Muchas URLs son de tipo /comm/jobs/, tracking, o redirect que igualmente
+        # funcionan al navegar con Playwright. Solo requerir que tengan URL válida.
+        BLOCKED_STATUSES = {'APPLIED', 'EXPIRED', 'REJECTED', 'NO MATCH', 'INVALID'}
+
         eligible = [
             job for job in linkedin_jobs
             if (
                 self._safe_fit_score(job.get('FitScore', 0)) >= FIT_SCORE_THRESHOLD and
-                job.get('Status', '').upper() not in ['APPLIED', 'EXPIRED', 'REJECTED'] and
-                job.get('ApplyURL') and
-                job.get('ApplyURL') != 'Unknown' and
-                'linkedin.com/jobs' in job.get('ApplyURL', '').lower()
+                job.get('Status', '').upper().strip() not in BLOCKED_STATUSES and
+                job.get('ApplyURL', '').strip() not in ('', 'Unknown', 'N/A', 'None') and
+                'linkedin.com' in job.get('ApplyURL', '').lower()  # Solo requerir dominio linkedin
             )
         ]
+
+        if not eligible:
+            # Debug: mostrar cuántos jobs hay y por qué no pasan el filtro
+            print(f"\n🔍 DEBUG: {len(linkedin_jobs)} jobs en pestaña LinkedIn")
+            for job in linkedin_jobs[:10]:
+                fit = self._safe_fit_score(job.get('FitScore', 0))
+                status = job.get('Status', '').upper().strip()
+                url = job.get('ApplyURL', '')
+                print(f"   • FIT={fit} | Status={status} | URL={'✅' if url else '❌ VACÍA'} | {job.get('Role','?')[:40]}")
+            print()
         
         return eligible[:MAX_APPLICATIONS_PER_RUN]
     

@@ -209,34 +209,125 @@ class JobBulletinProcessor:
         self.emails_to_delete = []
     
     def extract_linkedin_jobs(self, html_content: str) -> List[Dict]:
-        """Extract job listings from LinkedIn bulletin email"""
+        """
+        Extract job listings from LinkedIn bulletin email.
+
+        FIX 2026-03-26: Ampliar patrones de URL para capturar todos los formatos
+        que LinkedIn usa en sus emails de alerta:
+          - /jobs/view/XXXXXXXX          (directo)
+          - /comm/jobs/view/XXXXXXXX     (email comms)
+          - click.email.linkedin.com/... (tracking redirect)
+          - emltrk.com/...               (tracking alternativo)
+        """
         jobs = []
-        
-        # LinkedIn pattern: Job title usually in <a> tags with specific classes
-        # This is a simplified pattern - may need adjustment based on actual emails
-        title_pattern = r'<a[^>]*>([^<]+(?:Manager|Director|Lead|Analyst|Engineer|Developer)[^<]*)</a>'
-        company_pattern = r'<div[^>]*class="[^"]*company[^"]*"[^>]*>([^<]+)</div>'
-        location_pattern = r'<div[^>]*class="[^"]*location[^"]*"[^>]*>([^<]+)</div>'
-        
-        # Find job URLs
-        url_pattern = r'https://www\.linkedin\.com/jobs/view/\d+'
-        urls = re.findall(url_pattern, html_content)
-        
-        # Extract titles (simplified - adjust based on actual HTML)
-        titles = re.findall(title_pattern, html_content, re.IGNORECASE)
-        
-        for i, url in enumerate(urls):
+
+        # ── STEP 1: Extraer todas las URLs candidatas de LinkedIn ──────────
+        url_patterns = [
+            # Directo (el más común en navegador)
+            r'https?://(?:www\.)?linkedin\.com/jobs/view/(\d+)',
+            # Via email comms relay
+            r'https?://(?:www\.)?linkedin\.com/comm/jobs/view/(\d+)',
+            # Tracking URL con job_id en parámetro
+            r'linkedin\.com[^"<\s]*jobId=(\d+)',
+            r'linkedin\.com[^"<\s]*job[_-]?id=(\d+)',
+            r'linkedin\.com[^"<\s]*currentJobId=(\d+)',
+        ]
+
+        job_ids = []
+        seen_ids = set()
+        for pattern in url_patterns:
+            for match in re.finditer(pattern, html_content, re.IGNORECASE):
+                jid = match.group(1)
+                if jid not in seen_ids:
+                    seen_ids.add(jid)
+                    job_ids.append(jid)
+
+        # También capturar URLs de tracking completas (para resolverlas luego)
+        tracking_url_pattern = r'https?://(?:click\.email|emltrk|click)\.linkedin\.com/[^\s"<>]+'
+        tracking_urls = re.findall(tracking_url_pattern, html_content)
+
+        # ── STEP 2: Extraer título, empresa, ubicación ─────────────────────
+        # Múltiples formatos que LinkedIn ha usado históricamente
+        title_patterns = [
+            # Formato 2024-2025
+            r'<span[^>]*class="[^"]*job-title[^"]*"[^>]*>([^<]{5,100})</span>',
+            r'<h3[^>]*>([^<]{5,100})</h3>',
+            # Links con título
+            r'<a[^>]*linkedin\.com/jobs/view/\d+[^>]*>([^<]{5,100})</a>',
+            r'<a[^>]*linkedin\.com/comm/jobs/view/\d+[^>]*>([^<]{5,100})</a>',
+            # Texto plano con keywords de PM/BA/IT
+            r'>([^<]{5,80}(?:Manager|Director|Lead|Analyst|Consultant|Engineer|Owner|Scrum|Agile|ERP|ETL|BI)[^<]{0,30})<',
+        ]
+
+        titles = []
+        seen_titles = set()
+        for pattern in title_patterns:
+            for match in re.finditer(pattern, html_content, re.IGNORECASE):
+                t = match.group(1).strip()
+                # Limpiar HTML entities y espacios
+                t = re.sub(r'&[a-z]+;', ' ', t).strip()
+                t = re.sub(r'\s+', ' ', t)
+                if t and t not in seen_titles and len(t) > 4:
+                    seen_titles.add(t)
+                    titles.append(t)
+
+        # Empresas
+        company_patterns = [
+            r'<span[^>]*class="[^"]*company[^"]*"[^>]*>([^<]{2,80})</span>',
+            r'<p[^>]*class="[^"]*company[^"]*"[^>]*>([^<]{2,80})</p>',
+        ]
+        companies = []
+        for pattern in company_patterns:
+            companies.extend(re.findall(pattern, html_content, re.IGNORECASE))
+
+        # Ubicaciones
+        location_patterns = [
+            r'<span[^>]*class="[^"]*location[^"]*"[^>]*>([^<]{2,80})</span>',
+        ]
+        locations = []
+        for pattern in location_patterns:
+            locations.extend(re.findall(pattern, html_content, re.IGNORECASE))
+
+        # ── STEP 3: Construir jobs combinando IDs + títulos ────────────────
+        # Estrategia: primero por job_id (más fiable), luego llenar título
+        for i, job_id in enumerate(job_ids):
+            url = f"https://www.linkedin.com/jobs/view/{job_id}"
+            role = titles[i] if i < len(titles) else 'Pending AI Analysis'
+            company = companies[i].strip() if i < len(companies) else 'Unknown'
+            location = locations[i].strip() if i < len(locations) else 'Unknown'
+
             job = {
                 'Source': 'LinkedIn',
                 'ApplyURL': url,
-                'Role': titles[i] if i < len(titles) else 'Unknown Role',
-                'Company': 'Unknown',  # Would need more parsing
-                'Location': 'Unknown',
-                'CreatedAt': datetime.now().isoformat(),
+                'Role': role,
+                'Company': company,
+                'Location': location,
+                'CreatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                 'Status': 'New'
             }
             jobs.append(job)
-        
+
+        # Si hay tracking URLs y no encontramos job_ids, guardar tracking URLs directamente
+        # El auto-apply las seguirá al navegar
+        if not job_ids and tracking_urls:
+            print(f"   ℹ️  No job IDs found, using {len(tracking_urls)} tracking URLs")
+            for i, url in enumerate(tracking_urls[:20]):  # Limitar a 20
+                job = {
+                    'Source': 'LinkedIn',
+                    'ApplyURL': url,
+                    'Role': titles[i] if i < len(titles) else 'Pending AI Analysis',
+                    'Company': companies[i].strip() if i < len(companies) else 'Unknown',
+                    'Location': 'Unknown',
+                    'CreatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                    'Status': 'New'
+                }
+                jobs.append(job)
+
+        if jobs:
+            print(f"   ✅ LinkedIn: {len(jobs)} jobs, {len(job_ids)} with direct IDs")
+        else:
+            print(f"   ⚠️  LinkedIn: 0 jobs extracted — email format may have changed")
+
         return jobs
     
     def extract_indeed_jobs(self, html_content: str, text_content: str) -> List[Dict]:
