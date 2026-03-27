@@ -1,0 +1,553 @@
+======================================================================
+AI JOB FOUNDRY - BOARD ANALYSIS RESULTS
+Board: https://vacantes.rh-itchome.com/
+Date: 2025-12-20 04:39
+Total Jobs: 91
+======================================================================
+
+[1] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/179
+    WHY: La oferta coincide con las habilidades de Marcos, especialmente en Data Description & Manipulation Languages y ETL. Además, ofrece trabajo remoto desde ciudades mexicanas que él puede manejar, lo cual es una gran coincidencia con sus preferencias.
+----------------------------------------------------------------------
+
+[2] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/180
+    WHY: La oferta coincide con las habilidades y experiencia de Marcos, especialmente en Teradata Solutions y ETL. Además, ofrece trabajo remoto desde ciudades donde vive, lo que es ideal para él.
+----------------------------------------------------------------------
+
+[3] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/196
+    WHY: Marcos tiene una experiencia relevante en migraciones de ERP, incluyendo SAP y Dynamics AX. Además, su expertise en BI/Power BI y ETL se alinea con los requisitos del puesto. El hecho de que el trabajo sea remoto es un plus para él.
+----------------------------------------------------------------------
+
+[4] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/214
+    WHY: Marcos tiene experiencia relevante en SAP EWM y gestión de proyectos, coincide con el requerimiento de ser un consultor senior remoto/híbrido. Además, su dominio avanzado en análisis de datos y ERP migrations lo hace muy adecuado para esta posición.
+----------------------------------------------------------------------
+
+[5] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/218
+    WHY: La oferta coincide con las habilidades y experiencia de Marcos, especialmente en SAP Intercompany que se alinea con su dominio en ERP migrations. La opción de trabajo remoto es una ventaja adicional.
+----------------------------------------------------------------------
+
+[6] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/219
+    WHY: La oferta coincide con la experiencia de Marcos en SAP MM y ofrece un modelo de trabajo remoto/híbrido, lo que se ajusta a sus preferencias. Además, el puesto no es de desarrollo de software, lo cual también cumple con sus requisitos.
+----------------------------------------------------------------------
+
+[7] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/220
+    WHY: Marcos tiene la experiencia y habilidades requeridas para el puesto SAP PP senior, especialmente en relación con su dominio de ERP migrations. Además, ofrece la opción de trabajo remoto o híbrido, lo cual es compatible con sus preferencias.
+----------------------------------------------------------------------
+
+[8] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/221
+    WHY: Marcos tiene una amplia experiencia en proyectos de TI y gestión, especialmente en migraciones ERP y soluciones SAP. La vacante busca un experto en SAP Ariba con al menos 4 años de experiencia, lo que coincide con el perfil senior de Marcos. Además, ofrece trabajo remoto o híbrido, que es una prioridad para él.
+----------------------------------------------------------------------
+
+[9] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/223
+    WHY: La oferta coincide con las habilidades de Marcos, especialmente en SAP SD y la opción de trabajo remoto. Además, tiene experiencia relevante que supera los requisitos mínimos de la vacante.
+----------------------------------------------------------------------
+
+[10] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/229
+    WHY: Marcos tiene una amplia experiencia en proyectos de ERP y BI, lo que coincide con los requisitos del puesto. La oferta busca un experto en Oracle EBS Process Manufacturing (OPM), algo en lo que Marcos es probablemente competente dada su experiencia en Dynamics AX y SAP. Además, ofrece trabajo remoto, que es una prioridad para Marcos.
+----------------------------------------------------------------------
+
+[11] FIT: 9/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/262
+    WHY: La oferta coincide con las habilidades y experiencia de Marcos, especialmente en la gestión de proyectos senior. Además, permite trabajo remoto, que es una prioridad para él.
+----------------------------------------------------------------------
+
+[12] FIT: 8/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/213
+    WHY: Marcos tiene experiencia relevante en SAP FI Invoice to Cash y es un Project Manager senior con más de 10 años de experiencia. La oferta requiere dominio avanzado en SAP FI - Invoice to Cash e incluye opciones para trabajo remoto, lo que coincide con sus preferencias. Aunque la posición no especifica necesariamente roles de gestión o análisis de negocio, su amplia experiencia y habilidades técnicas hacen que sea un buen candidato.
+----------------------------------------------------------------------
+
+[13] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/150
+    WHY: Marcos tiene una amplia experiencia en gestión de proyectos y administración IT, especialmente en migraciones ERP y soluciones BI. Aunque la vacante se enfoca en AWS Cloud Specialist, Marcos podría adaptarse a este rol dada su experiencia técnica y habilidades de análisis. Sin embargo, el puesto no coincide con sus preferencias específicas como Project Manager senior o IT Manager.
+----------------------------------------------------------------------
+
+[14] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/153
+    WHY: Marcos tiene una amplia experiencia en gestión de proyectos y soluciones IT, incluyendo ERP migrations y BI. Aunque la oferta es para un Cloud Engineer OCI, Marcos podría adaptarse bien debido a su sólida base técnica y experiencia como Project Manager. La remota opción es favorable, pero no coincide exactamente con sus especializaciones.
+----------------------------------------------------------------------
+
+[15] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/154
+    WHY: Marcos tiene una experiencia relevante en gestión de proyectos IT y migraciones ERP, lo que podría aplicarse a ciertas áreas del rol DBA Oracle Cloud. Sin embargo, el puesto requiere habilidades específicas en bases de datos cloud y arquitectura PaaS que no se mencionan en su perfil. El trabajo remoto es una coincidencia positiva.
+----------------------------------------------------------------------
+
+[16] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/175
+    WHY: Marcos tiene experiencia relevante en gestión de proyectos y conocimientos técnicos, aunque la descripción del trabajo se centra más en Salesforce Service Cloud. El puesto ofrece trabajo remoto parcialmente, lo que es importante para Marcos. Sin embargo, no coincide exactamente con sus especializaciones previas (ERP migrations, ETL, BI/Power BI).
+----------------------------------------------------------------------
+
+[17] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/176
+    WHY: Marcos tiene una amplia experiencia en proyectos de TI y gestión, especialmente en migraciones ERP y soluciones BI. Aunque la oferta se centra en un desarrollador senior de Salesforce, Marcos podría adaptarse a este rol dada su experiencia técnica y habilidades de gestión. Sin embargo, el puesto no coincide con sus preferencias de carrera (no busca roles de desarrollo) y aunque ofrece trabajo remoto/híbrido, las ciudades mencionadas podrían no ser relevantes para él.
+----------------------------------------------------------------------
+
+[18] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/177
+    WHY: Marcos tiene una gran experiencia en proyectos de TI y gestión, especialmente en migraciones ERP. La vacante busca un Business Analyst senior con habilidades avanzadas en Microsoft Dynamics 356, lo cual coincide parcialmente con la experiencia de Marcos. El trabajo es remoto/híbrido, que se ajusta a sus preferencias. Sin embargo, el puesto no alinea directamente con su especialización en ETL y BI/Power BI.
+----------------------------------------------------------------------
+
+[19] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/182
+    WHY: Marcos tiene experiencia relevante en aplicaciones y arquitectura, especialmente en migración de ERP a la nube, lo cual se alinea con los requerimientos del puesto. Sin embargo, el rol busca un Application Tech Lead con un enfoque más técnico en Azure Cloud, mientras que Marcos es un Project Manager/IT Manager senior.
+----------------------------------------------------------------------
+
+[20] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/184
+    WHY: Marcos tiene experiencia relevante en análisis de negocio y gestión de proyectos, especialmente con Dynamics AX. La vacante busca un analista senior que pueda liderar equipos e implementar soluciones tecnológicas. Marcos cumple con estas habilidades pero la posición es para Monterrey, lo cual no coincide con su preferencia por trabajo remoto.
+----------------------------------------------------------------------
+
+[21] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/187
+    WHY: Marcos tiene una amplia experiencia como Project Manager / IT Manager senior, con especialización en migraciones ERP y BI/Power BI. La vacante requiere un experto en SAP HCM Payroll y habilidades de diseño e implementación de aplicaciones, lo cual podría ser una buena oportunidad para él. Sin embargo, el puesto no coincide perfectamente con su experiencia previa y busca principalmente roles remotos.
+----------------------------------------------------------------------
+
+[22] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/188
+    WHY: Marcos tiene una amplia experiencia en proyectos de migración ERP y BI, lo que se alinea con los requisitos del puesto para SAP IBP. Sin embargo, el título del trabajo sugiere un rol de desarrollo de software, que Marcos no está buscando. A pesar de esto, la opción de trabajo remoto es una ventaja significativa.
+----------------------------------------------------------------------
+
+[23] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/189
+    WHY: Marcos tiene la experiencia y habilidades necesarias para el puesto, especialmente en SAP MDG y gestión de datos maestros financieros. Sin embargo, el trabajo requiere viajar a Monterrey regularmente, lo cual podría no ser ideal para él.
+----------------------------------------------------------------------
+
+[24] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/190
+    WHY: Marcos tiene experiencia relevante en proyectos SAP y ERP, pero la oferta busca principalmente habilidades técnicas específicas de SAP FI - Accounts Payable. Aunque coincide con su nivel senior y preferencia por el trabajo remoto, no se alinea perfectamente con sus especializaciones en migración de ERPs o BI/Power BI.
+----------------------------------------------------------------------
+
+[25] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/191
+    WHY: Marcos tiene una amplia experiencia en proyectos de ERP y gestión de proyectos, lo que se alinea bien con el liderazgo requerido para la implementación de soluciones SAP FI - Accounts Receivable. Sin embargo, el puesto específico es más centrado en la consultoría técnica y menos en la dirección general o la gestión de múltiples equipos, lo que podría limitar su interés.
+----------------------------------------------------------------------
+
+[26] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/192
+    WHY: Marcos tiene una amplia experiencia en proyectos de ERP y es un Project Manager senior, lo que coincide con los requisitos del puesto. Sin embargo, el anuncio especifica SAP S4HANA Central Finance, mientras que Marcos está especializado en Dynamics AX y SAP (sin especificar la versión). Además, aunque acepta trabajo remoto, tiene que estar disponible para viajar, lo cual podría ser un desafío para él.
+----------------------------------------------------------------------
+
+[27] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/193
+    WHY: Marcos tiene experiencia relevante en ERP migrations y proyectos LATAM, pero la oferta es específica para SAP S4HANA Fixed Assets. Aunque no coincide exactamente con su perfil de Project Manager/IT Manager senior, cumple con los requisitos técnicos y permite trabajo remoto.
+----------------------------------------------------------------------
+
+[28] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/194
+    WHY: Marcos tiene una amplia experiencia en proyectos ERP y BI, lo que se alinea con los requisitos de SAP S/4HANA Group Reporting. Sin embargo, el puesto busca un experto específico en SAP S/4HANA Group Reporting y Marcos podría no tener la misma profundidad de experiencia en este sistema particular. Además, el rango de años de experiencia requerido (5-10) es ligeramente inferior a los 10+ años que tiene Marcos.
+----------------------------------------------------------------------
+
+[29] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/195
+    WHY: Marcos tiene experiencia relevante en proyectos de ERP y BI, pero la oferta busca un experto en SAP FI Bank Accounting y Cash Management. Aunque no es un mal match, el puesto requiere habilidades específicas que Marcos no menciona poseer.
+----------------------------------------------------------------------
+
+[30] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/197
+    WHY: Marcos tiene una amplia experiencia en SAP y otros sistemas ERP, lo que lo hace un buen candidato para el puesto de SAP Functional Lead. Sin embargo, la oferta especifica principalmente habilidades funcionales en SAP y procesos financieros, mientras que Marcos se especializa más en migraciones de ERP y proyectos LATAM. Además, aunque es remoto, no menciona necesariamente la disponibilidad para viajar.
+----------------------------------------------------------------------
+
+[31] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/198
+    WHY: Marcos tiene una amplia experiencia en gestión de proyectos y administración IT, incluyendo migraciones ERP y BI/Power BI. Sin embargo, la vacante busca un experto en seguridad de Oracle Cloud, lo cual no es una especialidad de Marcos. Aún así, su experiencia relevante y habilidades técnicas podrían ser adecuadas para esta posición, aunque el trabajo requiere presencialidad parcial ('hybrid'), lo que podría no ser ideal para él.
+----------------------------------------------------------------------
+
+[32] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/202
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, con especialización en migraciones de ERP y proyectos LATAM. La vacante busca un Project Manager senior con habilidades en Workday, lo cual no es una especialidad de Marcos pero sí coincide con su experiencia general en gestión de proyectos complejos. Además, la oferta permite trabajo remoto, que es prioritario para Marcos.
+----------------------------------------------------------------------
+
+[33] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/203
+    WHY: Marcos tiene experiencia relevante en SAP NetWeaver y otros sistemas relacionados, lo que coincide con los requisitos de la oferta. Sin embargo, el puesto parece enfocarse más en roles técnicos como administrador de sistemas (Basis) que en management. Además, aunque Marcos prefiere trabajo remoto, no se especifica si este rol permite teletrabajo.
+----------------------------------------------------------------------
+
+[34] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/204
+    WHY: Marcos tiene experiencia relevante en proyectos de TI y gestión, pero la oferta es específica para Murex FO Senior con énfasis en implementación y soporte. Aunque Marcos podría adaptarse, su especialización no coincide directamente con las habilidades requeridas por el puesto.
+----------------------------------------------------------------------
+
+[35] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/205
+    WHY: Marcos tiene una amplia experiencia en proyectos de TI y gestión, especialmente en migraciones ERP y BI/PowerBI. Aunque la vacante no coincide directamente con sus especialidades (ERP migrations, ETL), su experiencia como Project Manager senior podría adaptarse al rol de Murex Front Office Support. La opción de trabajo remoto es un punto a favor.
+----------------------------------------------------------------------
+
+[36] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/206
+    WHY: Marcos tiene una amplia experiencia en proyectos de TI y gestión, especialmente en migraciones ERP y BI/Power BI. Aunque la oferta no coincide exactamente con sus habilidades principales (ERP migrations), el puesto requiere fuertes habilidades analíticas y resolución de problemas, que Marcos posee. Además, ofrece opciones de trabajo remoto, lo cual es importante para él.
+----------------------------------------------------------------------
+
+[37] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/208
+    WHY: Marcos tiene una amplia experiencia en proyectos de IT y es especializado en ERP migrations, ETL, BI/Power BI. La oferta requiere un experto en Informatica PowerCenter con conocimientos adicionales en SQL y Git/Bitbucket. Aunque Marcos no busca roles como developer, su experiencia podría adaptarse a este rol senior. El trabajo híbrido permite trabajo remoto parcialmente, lo cual es aceptable para Marcos.
+----------------------------------------------------------------------
+
+[38] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/209
+    WHY: Marcos tiene una gran experiencia en proyectos de TI y gestión, incluyendo ERP migrations, BI/Power BI, y análisis de datos. La vacante requiere habilidades en administración de Azure, seguridad en la nube, y análisis de datos con Excel y Power BI, lo cual coincide parcialmente con sus fortalezas. Sin embargo, el rol parece enfocarse más en la administración de TI que en la gestión de proyectos o consultoría.
+----------------------------------------------------------------------
+
+[39] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/215
+    WHY: Marcos tiene experiencia relevante en SAP y es un Project Manager senior, pero el puesto requiere más enfásis en el desarrollo de software y metodologías ágiles. La remota/híbrida opción coincide con sus preferencias.
+----------------------------------------------------------------------
+
+[40] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/216
+    WHY: Marcos tiene experiencia relevante en SAP GRC y es un Project Manager senior, lo que coincide con las responsabilidades de la oferta. Sin embargo, el puesto parece orientado hacia el desarrollo y soporte técnico más que la gestión de proyectos. Además, aunque ofrece trabajo remoto, especifica una ubicación geográfica (Monterrey) para los candidatos locales.
+----------------------------------------------------------------------
+
+[41] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/217
+    WHY: Marcos tiene una experiencia relevante en proyectos de TI y ERP, aunque la vacante requiere habilidades específicas en SAP GTS que no menciona en su perfil. La oferta es remota o híbrida, lo cual coincide con sus preferencias. Sin embargo, el requisito mínimo de 4 años de experiencia puede ser un poco bajo para un profesional senior.
+----------------------------------------------------------------------
+
+[42] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/222
+    WHY: Marcos tiene experiencia relevante y coincide con los requisitos clave del puesto, especialmente en SAP QM. Sin embargo, el puesto es para un nivel senior pero requiere al menos 4 años de experiencia, lo cual podría no ser suficiente para calificar como 'Senior' en todos los sentidos. Además, aunque Marcos busca trabajo remoto, este puesto ofrece una opción híbrida si reside en Monterrey.
+----------------------------------------------------------------------
+
+[43] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/226
+    WHY: Marcos tiene la experiencia y habilidades necesarias para manejar el puesto de Lead Delivery Manager, especialmente en lo relacionado con la gestión de proyectos complejos y la interacción con niveles superiores de administración. Sin embargo, la oferta no especifica claramente los requisitos técnicos o las especializaciones en ERP migrations, ETL, BI/Power BI que Marcos tiene. Además, el puesto parece requerir presencialidad en Monterrey, lo cual es un desajuste con su preferencia por trabajo remoto.
+----------------------------------------------------------------------
+
+[44] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/227
+    WHY: Marcos tiene experiencia como Project Manager y IT Manager, lo que coincide con la necesidad de gestionar grandes equipos. Su especialización en ERP migrations y BI/Power BI podría aplicarse a la optimización del plan de suministro mencionado en el puesto. Sin embargo, no se especifica una necesidad particular para las habilidades en LATAM o remoto, lo que disminuye ligeramente su coincidencia.
+----------------------------------------------------------------------
+
+[45] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/228
+    WHY: Marcos tiene experiencia en ERP migrations y es especializado en EBS Finance, lo que coincide con los requerimientos de la oferta. Sin embargo, el puesto no especifica necesariamente un rol de Project Manager o IT Manager, por lo que se considera un buen match pero no excelente.
+----------------------------------------------------------------------
+
+[46] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/230
+    WHY: Marcos tiene experiencia relevante en gestión de proyectos y manejo de sistemas ERP, que se alinean con las habilidades requeridas para el puesto. Sin embargo, la oferta no menciona directamente ETL o BI/Power BI, ni especifica roles relacionados con la migración de ERPs como Dynamics AX o SAP. El trabajo es remoto, lo cual coincide con sus preferencias.
+----------------------------------------------------------------------
+
+[47] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/236
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, con especialización en ERP migrations, ETL, BI/Power BI y proyectos en LATAM. La oferta requiere habilidades de liderazgo y gestión de nómina, lo cual podría ser un buen ajuste para él dada su experiencia gerencial. Sin embargo, la descripción no menciona directamente las habilidades técnicas que Marcos posee (como ERP migrations o BI). Además, aunque es remoto, el enfoque del trabajo se centra más en gestión de nómina y liderazgo de equipo.
+----------------------------------------------------------------------
+
+[48] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/237
+    WHY: Marcos tiene experiencia relevante en gestión de proyectos y configuración de sistemas, pero el puesto requiere conocimientos específicos sobre nómina mexicana que no se mencionan en su perfil. El trabajo es remoto y coincide con sus preferencias.
+----------------------------------------------------------------------
+
+[49] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/238
+    WHY: Marcos tiene una amplia experiencia en gestión de proyectos y TI, incluyendo ERP migrations y BI/Power BI. La oferta requiere habilidades específicas en SAP ABAP, que no son su fuerte. Sin embargo, la opción para trabajo remoto es un punto a favor. El puesto parece ser de nivel senior, pero las habilidades requeridas no coinciden perfectamente con el perfil de Marcos.
+----------------------------------------------------------------------
+
+[50] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/239
+    WHY: Marcos tiene una amplia experiencia en proyectos de ERP y BI, lo que coincide con los requerimientos técnicos y funcionales del puesto. Sin embargo, la oferta especifica Oracle Cloud SCM y OM, áreas donde Marcos no tiene experiencia mencionada. Además, el puesto parece ser presencial en Ciudad de México, mientras que Marcos busca trabajo remoto.
+----------------------------------------------------------------------
+
+[51] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/240
+    WHY: Marcos tiene una gran experiencia en gestión de proyectos y manejo de tecnologías relevantes, pero el puesto busca un Tech Lead con énfasis en microservicios y Spring Boot, lo cual no es su especialidad. Además, aunque ofrece trabajo remoto, especifica que solo se aceptan candidatos de Monterrey, México, lo cual podría ser una limitación para Marcos si prefiere flexibilidad geográfica.
+----------------------------------------------------------------------
+
+[52] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/241
+    WHY: Marcos tiene una gran experiencia en proyectos de TI y gestión, especialmente en migraciones ERP. Sin embargo, el puesto requiere conocimientos específicos sobre PeopleSoft Finanzas que no se mencionan en su perfil. Aunque ofrece trabajo híbrido con fuerte componente remoto, la oferta está enfocada en consultores funcionales de PeopleSoft y no en roles de gestión o IT management.
+----------------------------------------------------------------------
+
+[53] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/242
+    WHY: Marcos tiene experiencia en proyectos de SAP y ERP migraciones, lo que se alinea con los requisitos del puesto. Además, su experiencia como Project Manager senior es relevante para el rol propuesto. Sin embargo, la oferta especifica un fuerte enfoque en SCM y SD procesos de SAP, que no está explícitamente mencionado entre las fortalezas de Marcos. La opción de trabajo remoto también se alinea con sus preferencias.
+----------------------------------------------------------------------
+
+[54] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/243
+    WHY: Marcos tiene la experiencia necesaria en SAP SD/WM/TM y ha liderado proyectos de implementación, pero el puesto requiere un MBA de una institución Tier-1 y experiencia específica con S/4 HANA que Marcos no menciona. Además, busca trabajo remoto mientras este anuncio es para Ciudad de México.
+----------------------------------------------------------------------
+
+[55] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/244
+    WHY: Marcos tiene una experiencia relevante en IT Management y Project Management, con especialización en ERP migrations y BI/Power BI. La vacante busca un Data on Cloud Architect senior con experiencia en data governance y seguridad de datos, lo cual podría ser un buen ajuste para Marcos si cuenta con conocimientos adicionales en arquitectura de datos y gobernanza. Sin embargo, la oferta no coincide exactamente con su perfil especializado.
+----------------------------------------------------------------------
+
+[56] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/246
+    WHY: Marcos tiene la experiencia y habilidades requeridas para el puesto de Project Manager senior. La oferta pide liderazgo en equipos de desarrollo de software, lo cual no es una prioridad para Marcos. Sin embargo, ofrece trabajo remoto, que sí coincide con sus preferencias. Falta información sobre las especializaciones técnicas mencionadas en su perfil.
+----------------------------------------------------------------------
+
+[57] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/249
+    WHY: Marcos tiene una amplia experiencia en gestión de proyectos y administración IT, incluyendo migraciones ERP y soluciones BI. Aunque la oferta se centra en desarrollo Salesforce, Marcos podría adaptarse a este rol dada su experiencia técnica y habilidades de liderazgo. La opción de trabajo remoto es un punto fuerte para él.
+----------------------------------------------------------------------
+
+[58] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/252
+    WHY: Marcos tiene una amplia experiencia en proyectos relacionados con SAP, incluyendo la migración de ERP y soluciones de BI. La vacante busca un consultor senior para SAP SCM WM-IM, lo cual coincide parcialmente con las habilidades de Marcos. Sin embargo, el puesto es híbrido en CDMX, mientras que Marcos prefiere trabajo remoto.
+----------------------------------------------------------------------
+
+[59] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/253
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, con especialización en migraciones de ERP (como Dynamics AX y SAP), ETL y BI/Power BI. La vacante busca un consultor senior para SAP PP-QM, lo que coincide parcialmente con sus habilidades técnicas. Sin embargo, la oferta es para México y requiere presencia física, lo cual no encaja con su preferencia por el trabajo remoto.
+----------------------------------------------------------------------
+
+[60] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/254
+    WHY: Marcos tiene experiencia relevante en SAP BW y BI, lo que coincide con los requerimientos de la oferta. Sin embargo, el puesto es para un analista senior, no necesariamente un Project Manager o IT Manager. Además, aunque ofrece opciones de trabajo remoto, también requiere presencia física en CDMX.
+----------------------------------------------------------------------
+
+[61] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/256
+    WHY: Marcos tiene una amplia experiencia en proyectos de TI y gestión de ERP, lo que coincide con los requisitos del puesto. Sin embargo, el rol se centra más en la consultoría SAP FI y menos en la gestión de proyectos o análisis de negocio. Además, requiere presencia física parcialmente en CDMX.
+----------------------------------------------------------------------
+
+[62] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/259
+    WHY: Marcos tiene una amplia experiencia en proyectos de TI y migraciones ERP, lo que hace un buen match con el puesto. Sin embargo, la oferta especifica un rol de Integration Engineer Semi-Senior con ubicación física requerida, lo cual no es ideal para Marcos. La remuneración y responsabilidades del puesto podrían ser adecuadas para su experiencia.
+----------------------------------------------------------------------
+
+[63] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/260
+    WHY: Marcos tiene una amplia experiencia como Project Manager/IT Manager senior, con especialización en ERP migrations y BI. La vacante de Data Architect «Senior» coincide parcialmente con sus habilidades técnicas y su experiencia, especialmente en diseño de arquitectura empresarial y gobernanza de datos. Sin embargo, la oferta no especifica necesariamente las áreas de ERP o Power BI donde Marcos tiene una gran cantidad de experiencia.
+----------------------------------------------------------------------
+
+[64] FIT: 7/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/261
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, con especialización en migraciones ERP, ETL y BI/Power BI. Aunque la oferta busca un Arquitecto Tecnológico Empresarial Senior, Marcos podría adaptarse a estas responsabilidades dada su experiencia técnica. La posibilidad de trabajo remoto es una ventaja para él.
+----------------------------------------------------------------------
+
+[65] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/172
+    WHY: Marcos es un Project Manager / IT Manager senior con experiencia en ERP migrations, ETL y BI/Power BI. La vacante busca a un Tech Lead especializado en desarrollo Java y Spring Boot, lo que no coincide con las habilidades de Marcos. Además, Marcos prefiere roles no relacionados con el desarrollo de software.
+----------------------------------------------------------------------
+
+[66] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/173
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la oferta laboral es para un Salesforce Developer con especialización en Apex Programming Language. Aunque Marcos podría tener algunas habilidades relevantes, el rol no coincide con su perfil profesional.
+----------------------------------------------------------------------
+
+[67] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/174
+    WHY: Marcos tiene una experiencia relevante en gestión de proyectos y administración IT, pero la oferta es para un desarrollador senior de Salesforce con énfasis en Apex. Aunque Marcos podría tener algunas habilidades relevantes, el rol no coincide con su perfil especializado en migraciones ERP, ETL o BI/Power BI.
+----------------------------------------------------------------------
+
+[68] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/178
+    WHY: Marcos tiene una amplia experiencia en proyectos de gestión y migración de ERP, así como en BI/Power BI. Sin embargo, la oferta laboral se centra en un SAP Basis Administrator, lo cual no coincide con su perfil profesional. Aunque es remoto, el rol específico no está alineado con sus habilidades especializadas.
+----------------------------------------------------------------------
+
+[69] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/183
+    WHY: Marcos tiene una experiencia relevante en gestión de proyectos y administración IT, pero la oferta es para un puesto de Administrador Linux y Cloud, que no coincide con su perfil. Además, aunque ofrece opciones de trabajo remoto, Marcos prefiere evitar roles relacionados con el desarrollo de software.
+----------------------------------------------------------------------
+
+[70] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/185
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la vacante es para un Data Engineer semi-senior. Aunque Marcos tiene conocimientos en Microsoft y Azure DevOps, el puesto busca habilidades específicas de ingeniería de datos que no coinciden con su perfil.
+----------------------------------------------------------------------
+
+[71] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/186
+    WHY: Marcos tiene una amplia experiencia en gestión de proyectos y migraciones ERP, pero la oferta busca un desarrollador de aplicaciones con habilidades específicas en Terraform, Ansible, DevSecOps y GitLab. Aunque Marcos podría tener algunas competencias relevantes, el puesto no coincide con su perfil profesional como Project Manager/IT Manager senior.
+----------------------------------------------------------------------
+
+[72] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/200
+    WHY: Marcos tiene una amplia experiencia en proyectos de gestión y TI, pero la vacante busca un Advanced Application Engineer con especialización en Salesforce Experience Cloud. Aunque Marcos no es candidato para roles de desarrollo de software, su experiencia podría ser relevante si se ajusta a las necesidades del proyecto. La remota es una opción que coincide con sus preferencias.
+----------------------------------------------------------------------
+
+[73] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/207
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la oferta es para un SAP HANA DB Administrator. Aunque Marcos podría tener conocimientos sobre SAP HANA debido a su experiencia con ERP migrations, el rol no coincide con sus principales intereses y habilidades (no busca roles de desarrollo). Además, aunque la descripción no especifica si el trabajo debe ser presencial o remoto, se puede inferir que es un rol técnico específico que probablemente requiera presencia física en México.
+----------------------------------------------------------------------
+
+[74] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/210
+    WHY: Marcos tiene una amplia experiencia en gestión de proyectos y TI, pero la vacante se centra en un rol de administración de servidores con especialización en Linux y nube. Aunque Marcos podría adaptarse a este nuevo desafío, su perfil profesional no coincide directamente con las habilidades requeridas para esta posición.
+----------------------------------------------------------------------
+
+[75] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/211
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la oferta laboral se centra en un rol de Developer con especialización en Terraform sobre Microsoft Azure. Aunque Marcos podría tener algunas habilidades relevantes para este puesto, el perfil del trabajo no coincide con su experiencia principal en proyectos de migración ERP y BI/Power BI.
+----------------------------------------------------------------------
+
+[76] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/224
+    WHY: La oferta laboral no coincide con el perfil de Marcos Alvarado ya que busca roles como Project Manager o IT Manager, mientras que esta vacante es para un Developer-Microsoft Dynamics 365 ERP Technical. Además, la descripción especifica que debe ser remoto, pero las responsabilidades y requisitos son más propios de un rol de desarrollo técnico.
+----------------------------------------------------------------------
+
+[77] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/231
+    WHY: Marcos tiene una gran experiencia en gestión de proyectos y TI, pero la oferta es para un Full Stack Engineer con énfasis en Java/Angular. Aunque Marcos podría tener algunas habilidades relevantes, el rol no coincide con su perfil profesional como Project Manager/IT Manager senior especializado en migraciones ERP y proyectos LATAM.
+----------------------------------------------------------------------
+
+[78] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/232
+    WHY: La oferta busca un Java Tech Lead con experiencia como desarrollador de aplicaciones, lo cual no coincide con el perfil de Marcos Alvarado que es Project Manager/IT Manager senior especializado en migraciones ERP y proyectos LATAM. Además, la posición requiere habilidades específicas en desarrollo de software que Marcos no necesita buscar.
+----------------------------------------------------------------------
+
+[79] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/233
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la oferta laboral es para un DBA Oracle-OCI senior con habilidades específicas en administración de bases de datos Oracle. Aunque Marcos podría tener conocimientos generales sobre Oracle Cloud Infrastructure, su especialización está más orientada hacia las migraciones de ERP y proyectos de BI/Power BI.
+----------------------------------------------------------------------
+
+[80] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/234
+    WHY: Marcos tiene una amplia experiencia en proyectos de migración ERP y manejo de datos, pero el puesto es para un analista junior. Aunque coincide con la necesidad de habilidades remota y conocimientos de SuccessFactors, no se alinea con su nivel senior ni sus preferencias de rol.
+----------------------------------------------------------------------
+
+[81] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/235
+    WHY: Marcos tiene una amplia experiencia como Project Manager/IT Manager senior, pero la oferta es para un analista de seguridad junior y requiere habilidades específicas en SAP SuccessFactors que no coinciden con su perfil. Además, aunque permite trabajo remoto, el nivel de experiencia requerido es menor al del candidato.
+----------------------------------------------------------------------
+
+[82] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/245
+    WHY: Marcos tiene una gran experiencia en proyectos de gestión y migración ERP, pero la oferta busca un especialista funcional en Oracle EBS Finance. Aunque Marcos podría adaptarse a este rol, no es lo que generalmente busca (no está interesado en roles de desarrollo o programación). Además, el trabajo requiere presencia física, lo cual no coincide con su preferencia por el trabajo remoto.
+----------------------------------------------------------------------
+
+[83] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/248
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la vacante busca un Data Engineer con especialización en Azure Databricks. Aunque Marcos podría tener conocimientos de datos y arquitectura, no se alinea directamente con las habilidades requeridas para esta posición. Además, el puesto parece ser presencial en Ciudad de México.
+----------------------------------------------------------------------
+
+[84] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/251
+    WHY: Marcos tiene una amplia experiencia en gestión de proyectos y administración IT, pero la oferta está orientada hacia un rol de desarrollador senior en Salesforce. Aunque Marcos podría tener algunas habilidades relevantes como ETL o integraciones, no es el perfil ideal para esta vacante.
+----------------------------------------------------------------------
+
+[85] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/255
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero el puesto de SAP Basis Administrator no coincide con sus habilidades especializadas en ERP migrations, ETL o BI/Power BI. Aunque es un rol senior, la posición requiere conocimientos específicos que Marcos no busca y no necesariamente alinea con su experiencia.
+----------------------------------------------------------------------
+
+[86] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/257
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la oferta laboral es para un SysAdmin con especialización en Microsoft SCCM, Intune, Active Directory, y Autopilot. Aunque Marcos podría tener algunas habilidades relevantes, el puesto no coincide con su perfil de búsqueda (no busca roles de desarrollo o programación). Además, aunque Marcos prefiere trabajar remoto, la oferta es híbrida.
+----------------------------------------------------------------------
+
+[87] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/258
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la oferta es para un puesto de ingeniería de servidores con especialización en Microsoft Office 365. Aunque Marcos podría tener algunas habilidades relevantes, el rol no coincide con su perfil profesional principal y busca roles de gerente de proyecto o administrador de TI.
+----------------------------------------------------------------------
+
+[88] FIT: 4/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/263
+    WHY: Marcos tiene una amplia experiencia como Project Manager y IT Manager, pero la vacante busca un Power BI Developer. Aunque Marcos podría tener las habilidades técnicas necesarias para el puesto, no es lo que está buscando en su próxima posición. Además, aunque ofrece trabajo híbrido, Marcos prioriza el trabajo remoto.
+----------------------------------------------------------------------
+
+[89] FIT: 3/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/201
+    WHY: Marcos Alvarado es un Project Manager/IT Manager senior con experiencia en ERP migrations, ETL y BI. La oferta busca a un Salesforce Developer, lo cual no coincide con su perfil profesional ni sus intereses. Además, el puesto parece ser presencial en Ciudad de México.
+----------------------------------------------------------------------
+
+[90] FIT: 3/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/225
+    WHY: La oferta es para un analista de soporte al cliente, lo cual no coincide con el perfil profesional de Marcos Alvarado como Project Manager/IT Manager senior especializado en migraciones ERP y proyectos LATAM. Además, la posición requiere presencialidad en Monterrey, México, lo que contradice su preferencia por trabajo remoto.
+----------------------------------------------------------------------
+
+[91] FIT: 3/10 | Vacante
+    Company: Unknown
+    URL: https://vacantes.rh-itchome.com/vacante/250
+    WHY: La oferta busca un Salesforce Developer Junior, lo cual no coincide con el perfil de Marcos Alvarado como Project Manager/IT Manager senior. Además, aunque ofrece opciones de trabajo remoto, la mayoría de las ubicaciones son presenciales o híbridas, lo que podría no ser ideal para Marcos.
+----------------------------------------------------------------------
+

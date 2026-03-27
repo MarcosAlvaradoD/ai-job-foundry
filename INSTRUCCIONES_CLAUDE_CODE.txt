@@ -1,0 +1,35 @@
+﻿=================================================================
+🎯 INSTRUCCIONES PARA CLAUDE CODE
+=================================================================
+
+1. ABRE CLAUDE CODE:
+   - VS Code ya está abierto
+   - Click en icono 'Codex' (lado izquierdo)
+   - O: Ctrl+Shift+P → 'Claude Code: Open'
+
+2. NEW CHAT:
+   - Click 'New Chat'
+   - Pega contenido de: CLAUDE_CODE_PROMPT.md
+
+3. PRIMERA INSTRUCCIÓN:
+   'Lee CLAUDE_CODE_PROMPT.md y ejecuta TAREA 1 y TAREA 2'
+
+4. CLAUDE CODE HARÁ:
+   ✅ Fix IP de LM Studio en .env
+   ✅ Ejecutar calculate_linkedin_fit_scores.py
+   ✅ Mostrar resultados
+   ✅ Verificar todo funciona
+
+5. DESPUÉS:
+   'Implementa Auto-Apply AI Local según PROMPT_MIGRACION_AUTOAPPLY_AI.md'
+
+=================================================================
+ARCHIVOS DE REFERENCIA:
+=================================================================
+- CLAUDE_CODE_PROMPT.md          ← Prompt principal
+- PROMPT_MIGRACION_AUTOAPPLY_AI.md ← Detalles técnicos
+
+Google Sheets:
+https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEetTsCIBxdg
+
+=================================================================

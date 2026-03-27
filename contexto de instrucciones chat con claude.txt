@@ -1,0 +1,521 @@
+Purpose & context
+Marcos is building AI Job Foundry, an automated job search system located at C:\Users\MSI\Desktop\ai-job-foundry. The system scrapes LinkedIn, Indeed, and Glassdoor; processes recruiter emails and job bulletin alerts via Gmail API; calculates AI-powered FIT scores using local LLMs (LM Studio + Qwen models); stores results in Google Sheets; and auto-applies to qualified positions via Playwright automation.
+Target roles: Project Manager, Product Owner, Senior Business Analyst, IT Manager, ETL Consultant — remote preferred, explicitly avoiding software developer positions.
+Professional background: 10+ years in ERP migrations (including Intelisis to Dynamics AX across LATAM), ETL/data migration, BI/Power BI, and IT infrastructure. At TCS: Assistant Consultant → Sr. ETL Consultant → Sr. Business Analyst (Toyota Finance and a bank under NDA). Former university professor (weekends). Has launched mobile apps, desktop apps, and browser extensions. Core strength: integrating business, data, and technology — strong communicator across technical and non-technical stakeholders.
+Hardware: RTX 4090 (24GB VRAM), 64GB RAM, i9-14900K — capable of running large local models comfortably.
+Infrastructure stack: Windows 11, PowerShell 7.5.4, Python 3.13 (py command, not python), LM Studio, Ollama, Docker (n8n, Redis, Postgres), Google Sheets API, Gmail API, Playwright, Flask.
+
+Current state
+Project is in active development, approximately 85–99% complete depending on component. Core pipeline (email ingestion → bulletin processing → FIT scoring → Google Sheets storage) is functional. Key active components:
+
+Job bulletin processor (core/automation/job_bulletin_processor.py): scrapes LinkedIn/Indeed/Glassdoor bulletins; "Generic"/"Unknown" source jobs now redirect to LinkedIn tab as a workaround for missing tabs
+FIT scoring: scripts/maintenance/calculate_linkedin_fit_scores_v2.py; scores stored as X/10 strings requiring split parsing; salary penalties applied for below-threshold offers
+Auto-apply: core/automation/auto_apply_linkedin.py with run() method; --force flag added to bypass interactive prompts in pipeline; LinkedIn notifications scraper (linkedin_notifications_scraper.py) added for jobs page extraction
+Daily pipeline: run_daily_pipeline.py uses subprocess calls to actual scripts (not broken imports); supports --all, --quick, --emails, --analyze, --apply, --expire, --report
+Google Sheets: ID 1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg; tabs include LinkedIn, Glassdoor, Indeed, JobLeads, Computrabajo, Resumen
+Control Center: interactive menu with 17 options; integrates smart verifiers and LinkedIn workflow
+
+Immediate challenges:
+
+Completing pending FIT score calculations for remaining unscored jobs
+Auto-apply occasionally reports "No eligible jobs" despite qualifying jobs existing — root cause traced to tab-targeting or filtering logic
+OAuth tokens expire periodically; fix is to delete token.json and re-authenticate (stored at data/credentials/)
+
+
+On the horizon
+
+Auto-apply AI local feature: EasyOCR + LM Studio + Playwright for form-filling automation
+Additional job boards: nodesk.co, weworkremotely.com, builtin.com, trulyremote.co
+MCP integration: Claude Code VS Code extension configured to use local Ollama models; qwen2.5:7b set as default (speed/RAM), qwen3-coder:latest as alternative for complex tasks
+Glassdoor auto-apply: highest-volume untapped source (300+ jobs); no automation yet
+Additional email sources: Adzuna, Computrabajo, ZipRecruiter, self-forwarded LinkedIn jobs
+
+
+Key learnings & principles
+
+Never modify working code without strong justification — a core project rule after several regressions caused by refactoring functional components
+Subprocess over imports in pipeline: direct subprocess calls to scripts are more reliable than module imports for the daily pipeline, avoiding path/import errors
+FIT score parsing must handle multiple formats: "8/10", empty strings, None, and plain integers all appear in Sheets data
+Gmail-first over scraping: job alert emails from LinkedIn/Indeed/Glassdoor contain complete job data without rate-limiting risk — process emails before scraping
+Bulletin tracking gap: data/state/processed_bulletins.txt tracks email IDs but not dates — old bulletins get reprocessed if the file resets, causing duplicates
+OAuth: deleting token.json and re-running full OAuth flow is more reliable than attempting token refresh
+PowerShell quirks: use py not python; avoid emoji/Unicode in Write-Host (causes encoding errors); use semicolons not && for command chaining; .\script.bat syntax required
+LM Studio vs Ollama IPs: LM Studio uses 172.17.32.1:11434; Ollama uses 127.0.0.1:11434 — not interchangeable
+Google Sheets duplicate headers: use get_all_values() not get_all_records() on tabs with duplicate column names (e.g., "Notes")
+Playwright verification: Firefox with headless=False and wait_until='domcontentloaded'; 3-second rate limiting between requests; detect expiry in both English and Spanish
+
+
+Approach & patterns
+
+Marcos acts as Product Owner for AI Job Foundry — sets priorities, evaluates tradeoffs, makes strategic calls
+Prefers direct, no-filler responses in a professional conversational style; wants ideas challenged, not just validated; values practical analogies
+Systematic debugging: creates focused test scripts to isolate issues before touching the full pipeline
+Documents everything: PROJECT_STATUS.md, PROMPT_NUEVO_CHAT.md, and per-session fix docs (e.g., FIX_GENERIC_TAB_COMPLETED.md) for continuity across chat sessions
+Migrates to new chat sessions proactively when approaching token limits, with detailed handoff prompts
+Prefers incremental, safe fixes over wholesale rewrites — especially protective of weeks of accumulated development work
+
+
+Tools & resources
+
+Local AI: LM Studio (primary, 172.17.32.1:11434), Ollama (127.0.0.1:11434) — models include qwen2.5:7b, qwen3-coder:latest (30.5B), glm-4.7-flash:latest
+Automation: Playwright (browser automation), BeautifulSoup4 (HTML parsing), Whisper (audio transcription for Interview Copilot)
+Storage/APIs: Google Sheets API, Gmail API, Google OAuth (data/credentials/)
+Dev tools: Desktop Commander (MCP file operations), Claude Code VS Code extension (configured for Ollama), PowerShell 7.5.4
+Infrastructure: Docker (n8n, Redis, Postgres), Flask (web dashboard on port 5555), Windows Task Scheduler / Startup folder for auto-launch
+Path notes for MCP shell: Python requires py or full path; Ollama CLI requires full path C:\Users\MSI\AppData\Local\Programs\Ollama\ollama.exe; use Invoke-WebRequest to confirm running Ollama models rather than ollama.exe list
+
+# 🎯 INSTRUCCIONES DEL PROYECTO AI JOB FOUNDRY
+
+## 📋 CONTEXTO RÁPIDO
+
+Este es un proyecto de automatización de búsqueda de empleo llamado **AI Job Foundry**. El objetivo es crear un sistema "set it and forget it" que:
+
+1. Scrapea ofertas de trabajo (LinkedIn, Indeed, Glassdoor)
+2. Procesa emails de reclutadores
+3. Analiza match con AI usando LM Studio local + Gemini fallback
+4. Calcula FIT SCORES (0-10)
+5. Guarda todo en Google Sheets
+6. Auto-aplica a ofertas
+Importante 7. Cada que se genere código debe de indicarse en que lugar del proyecto va si no tendremos que estar limpiando cada vez y eso rompe la secuencia.
+
+---
+
+## 👤 SOBRE EL USUARIO
+
+**Nombre:** Marcos Alberto Alvarado de la Torre  
+**Roles objetivo:** Project Manager, Product Owner, Senior Business Analyst, IT Manager  
+**NO busca:** Roles de Software Developer/Programmer  
+**Preferencia:** Remote work (familia con bebé)  
+**Ubicación:** Guadalajara, México (CST, GMT-6)
+
+---
+
+## 🛠️ TECH STACK PRINCIPAL
+
+- **AI Local:** LM Studio con Qwen 2.5 14B
+- **AI Fallback:** Gemini API
+- **Storage:** Google Sheets (ID: 1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg)
+- **Scraping:** Playwright (LinkedIn, Indeed)
+- **Email:** Gmail API
+- **Automation:** n8n workflows, PowerShell scripts
+- **OS:** Windows 11
+
+---
+
+## 📂 ESTRUCTURA DEL PROYECTO
+
+```
+ai-job-foundry/
+├── core/
+│   ├── ingestion/        # Scrapers (LinkedIn, Indeed)
+│   ├── enrichment/       # AI analyzer, cover letter gen
+│   ├── sheets/           # Google Sheets manager
+│   ├── automation/       # Gmail monitor
+│   └── utils/            # LLM client (multi-provider)
+├── scripts/              # Test scripts
+├── data/                 # Credentials, CV, cover letters
+├── logs/                 # Session logs
+└── *.ps1                 # PowerShell automation
+```
+
+---
+
+## ✅ QUÉ ESTÁ FUNCIONANDO (70%)
+
+1. **LinkedIn Scraper** - 100% funcional
+2. **Gmail Processing** - 100% funcional
+3. **AI Analysis** - 100% funcional (LM Studio + Gemini)
+4. **Google Sheets** - 100% funcional
+5. **PowerShell Scripts** - 100% funcional
+
+**Última ejecución exitosa:**
+- 10 emails procesados
+- FIT SCORES: 2/10 a 9/10
+- Best match: Technical Product Owner (9/10)
+
+---
+
+## ⚠️ PROBLEMAS CONOCIDOS
+
+1. **Links faltantes en Google Sheets**
+   - Email processing no extrae URLs
+   - LinkedIn scraper sí guarda links
+   - Fix pendiente: Modificar gmail_jobs_monitor.py
+
+⏱️ Indeed scraper timeout
+
+El proceso se queda congelado porque Chromium deja de responder.
+
+El problema no es el tiempo, sino un freeze del navegador.
+
+Se requiere fix, no ignorar el proceso.
+
+---
+
+## 🎯 PRINCIPIOS DE DESARROLLO
+
+1. **Local-first:** LM Studio > Cloud AI (privacidad + costo)
+2. **Functional > Perfect:** Entregar features funcionando, iterar después
+3. **Windows-optimized:** Scripts en PowerShell, paths absolutos
+4. **Set it and forget it:** Minimizar intervención diaria
+5. **Comprehensive logging:** Todo en logs/powershell/
+
+---
+
+## 📊 ARCHIVOS IMPORTANTES
+
+**Estado del proyecto:**
+- `PROJECT_STATUS.md` - Progreso detallado actualizado debe actualizarse en cada iteración, 
+
+**Migración de chat:**
+- `PROMPT_NUEVO_CHAT.md` - Para copiar al 75% de capacidad
+
+**Configuración:**
+- `.env` - Variables de entorno (LM Studio IP, API keys)
+
+**Google Sheets:**
+- URL: https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg
+- Pestaña activa: "Jobs"
+
+---
+
+## 🚀 COMANDOS COMUNES
+
+**Ver datos en Sheets:**
+```powershell
+py view_sheets_data.py
+```
+
+**Procesar emails:**
+```powershell
+py scripts\test_email_processing.py
+```
+
+**Scraping LinkedIn:**
+```powershell
+py scripts\visual_test.py
+```
+
+**Inicio completo:**
+```powershell
+.\start_all.ps1
+```
+
+---
+
+## 💡 TIPS PARA NUEVA SESIÓN DE CHAT
+
+1. **Si el chat está al 65-75%:**
+   - Lee `PROJECT_STATUS.md` para estado actual
+   - Copia contenido de `PROMPT_NUEVO_CHAT.md` a nuevo chat
+   - Continúa desde donde se quedó
+
+2. **Si necesitas contexto del código:**
+   - LinkedIn scraper: `core/ingestion/linkedin_scraper_V2.py` (FINAL)
+   - Email processor: `core/automation/gmail_jobs_monitor.py`
+   - AI analyzer: `core/enrichment/ai_analyzer.py`
+
+3. **Si algo no funciona:**
+   - Revisa logs en `logs/powershell/session_*.log`
+   - Ejecuta `.\start_all.ps1` para reiniciar servicios
+   - Verifica LM Studio: http://127.0.0.1:11434
+
+4.**En cada iteración revisa la raíz del proyecto **
+    - El proyecto esta en:   "C:\Users\MSI\Desktop\ai-job-foundry"
+    - Una vez revisado realiza limpieza de los archivo organízalos ponlos en su lugar 
+    - Si algo falla al organizar automático dame un script para correrlo y que lo organice.
+
+---
+
+## 🔧 DEBUGGING RÁPIDO
+
+**LM Studio no responde:**
+```powershell
+.\detect_lm_studio_ip.ps1
+```
+
+**Unicode errors:**
+```powershell
+.\fix_unicode_all.ps1
+Get-Process python* | Stop-Process -Force
+```
+
+**Ver pestañas de Sheets:**
+```powershell
+py check_sheets_tabs.py
+```
+
+---
+
+## 📞 REFERENCIAS EXTERNAS
+
+**Perfil profesional completo:**
+- Ver documento: "PROMPT MAESTRO - PERFIL LABORAL C.txt"
+- Contexto PM/PO/BA/IT Manager
+- Experiencia en ERP migrations, ETL, BI
+
+**Herramientas en uso:**
+- Desktop Commander (MCP tool)
+- LM Studio (local AI)
+- n8n (workflows)
+- Playwright (web automation)
+
+---
+La ubicación del proyecto raíz es C:\Users\MSI\Desktop\ai-job-foundry
+
+MEMORIA DEL PROYECTO - AI JOB FOUNDRY
+
+**Para pegar en: ConfiguraciÃ³n del Proyecto â†’ Memoria (o Custom Instructions)**
+
+---
+
+## RESUMEN EJECUTIVO
+
+Marcos estÃ¡ desarrollando **AI Job Foundry**, un sistema automatizado de bÃºsqueda de empleo que scrapea LinkedIn/Indeed, procesa emails, analiza match con AI local (LM Studio + Qwen 2.5 14B), y guarda en Google Sheets. Actualmente 70% funcional.
+
+---
+
+## CONTEXTO PROFESIONAL
+
+- **Roles objetivo:** PM/PO/BA senior, IT Manager, ETL Consultant
+- **NO busca:** Software Developer positions
+- **Prioridad:** Remote work (familia con bebÃ© MÃ¡ximo)
+- **UbicaciÃ³n:** Guadalajara, MÃ©xico (CST)
+- **Experiencia:** ERP migrations, ETL (800+ TB), BI/Power BI, IT Infrastructure
+
+---
+
+## ESTADO ACTUAL DEL PROYECTO
+
+**Funcionando âœ…:**
+- LinkedIn Scraper (100%)
+- Gmail Processing (100%)
+- AI Analysis con LM Studio (100%)
+- Google Sheets integration (100%)
+- PowerShell automation scripts (100%)
+
+**Ãšltimo resultado:** 10 emails procesados, FIT SCORES 2-9/10, mejor match: Technical Product Owner (9/10)
+
+**Pendiente â³:**
+- Links faltantes en Sheets (Gmail no extrae URLs)
+- Auto-apply a ofertas
+- Interview Copilot
+
+---
+
+## TECH STACK PRINCIPAL
+
+- **AI:** LM Studio (local) + Gemini (fallback) via LiteLLM
+- **Model:** Qwen 2.5 14B Instruct
+- **Storage:** Google Sheets (ID: 1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg)
+- **Scraping:** Playwright con stealth mode
+- **Email:** Gmail API
+- **OS:** Windows 11 con PowerShell automation
+
+---
+
+## PROBLEMAS CONOCIDOS
+
+1. **Links faltantes:** Email processor no extrae URLs de los emails
+2. **LM Studio IP cambiante:** Resuelto con detect_lm_studio_ip.ps1
+3. **Unicode en Windows:** Resuelto con fix_unicode_all.ps1
+4. **Indeed timeout:** LinkedIn es mÃ¡s confiable, Indeed es opcional
+
+---
+
+## PRINCIPIOS CLAVE
+
+- **Local-first AI:** LM Studio > Cloud (privacidad, costo)
+- **Functional > Perfect:** Entregar features funcionando, iterar despuÃ©s
+- **Set it and forget it:** AutomatizaciÃ³n mÃ¡xima, mÃ­nima intervenciÃ³n
+- **Windows-optimized:** PowerShell scripts, paths absolutos
+- **Comprehensive logging:** logs/powershell/session_*.log
+
+---
+
+## ARCHIVOS DE REFERENCIA
+
+**Al 65-75% del chat:**
+- Lee: `PROJECT_STATUS.md` (estado detallado)
+- Copia: `PROMPT_NUEVO_CHAT.md` (migraciÃ³n completa)
+
+**Logs:**
+- PowerShell sessions: `logs/powershell/`
+- Google Sheets: https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg
+
+---
+
+## COMANDOS FRECUENTES
+
+```powershell
+.\start_all.ps1                    # Inicio completo
+py view_sheets_data.py             # Ver datos
+py scripts\test_email_processing.py # Procesar emails
+py scripts\visual_test.py          # LinkedIn scraper
+.\detect_lm_studio_ip.ps1          # Fix LM Studio
+```
+
+---
+
+## PRÃ“XIMOS PASOS INMEDIATOS
+
+1. **Fix links faltantes** - Modificar gmail_jobs_monitor.py para extraer URLs
+2. **Procesar emails restantes** - 50+ en carpeta JOBS/Inbound
+3. **Auto-apply bÃ¡sico** - LinkedIn Easy Apply con Playwright
+
+---
+
+**Ãšltima actualizaciÃ³n:** 2025-11-16 02:40 CST  
+**Progreso:** 70%  
+**Meta Diciembre:** 95% (auto-apply + interview copilot)
+
+
+PROMPT MAESTRO â€” PERFIL LABORAL COMPLETO DE MARCOS A. ALVARADO
+
+Quiero que actÃºes usando este contexto profesional sobre mÃ­ (Marcos Alberto Alvarado de la Torre). A partir de ahora, siempre considera toda esta informaciÃ³n para cualquier tarea laboral, CV, cover letter, entrevistas, prompts tÃ©cnicos, project management, business analysis, o estrategia profesional.
+
+ðŸ§© IDENTIDAD PROFESIONAL
+
+Soy un Project Manager / Product Owner / Business Analyst / IT Manager / ETL Consultant senior, con experiencia fuerte en:
+
+Migraciones de ERP a gran escala
+
+Integraciones complejas en entornos LATAM
+
+GestiÃ³n de infraestructura TI (LAN/WAN, firewalls, Ubiquiti â†’ Meraki)
+
+ETL, limpieza masiva de datos y automatizaciones
+
+GestiÃ³n de proyectos multinacionales
+
+Entrega de software, DevOps, metodologÃ­as Ã¡giles
+
+Telecom, bancos, manufactura y salud
+
+ðŸ§‘â€ðŸ’¼ EXPERIENCIA LABORAL RELEVANTE
+NEFAB â€“ LATAM IT Manager / Project Lead
+
+LiderÃ© la migraciÃ³n de ERP de Intelisis a Dynamics AX para LATAM.
+
+GestionÃ© infraestructura completa del continente: redes, servidores, firewalls, ERP, inventarios, soporte.
+
+CoordinÃ© equipos en MÃ©xico y Suecia (diferencia cultural + husos horarios).
+
+ImplementÃ© la transiciÃ³n de Ubiquiti a Meraki.
+
+GestionÃ© requisitos fiscales de MÃ©xico, Colombia, Chile, Brasil para el ERP.
+
+Responsabilidad directa de importaciÃ³n, setup y cumplimiento normativo.
+
+TCS â€“ Sr. ETL Consultant / Sr. Business Analyst
+
+Toyota Financial Services
+
+MigraciÃ³n de ERP y extracciÃ³n de datos desde sistemas legacy.
+
+MapeÃ© bases de datos completas entre ambos sistemas (tablas, campos, relaciones).
+
+RealicÃ© automatizaciÃ³n en Python para organizar, deduplicar y clasificar 800 TB+ de archivos con nombres irreconocibles.
+
+Reportes ETL y anÃ¡lisis de riesgo/datos.
+
+Banco (Cliente bajo NDA)
+
+RealicÃ© BA/ETL en proyectos altamente regulados (informaciÃ³n restringida por NDA).
+
+Medisist â€“ IT / On-Premise DB Administrator (EHR/EMR)
+
+AdministraciÃ³n de bases de datos on-premise de hospitales en USA, respaldadas en MÃ©xico.
+
+Manejo de EHR/EMR/HL7, cifrado, integraciones y cumplimiento.
+
+Soporte de sistemas clÃ­nicos, interoperabilidad, backups y recuperaciÃ³n.
+
+Proyecto Tekax â€“ Gobierno de YucatÃ¡n (Telemedicina)
+
+DiseÃ±Ã© y entreguÃ© un sistema completo de telemedicina.
+
+Infraestructura de internet de nueva creaciÃ³n en zona rural.
+
+IntegraciÃ³n de software + hardware.
+
+Almacenamiento en caliente para operar offline y sincronizaciÃ³n a almacenamiento frÃ­o cuando regresaba internet.
+
+Manejo de datos mÃ©dicos, estudios (mamografÃ­as, eco doppler, laboratorio, notas mÃ©dicas).
+
+ðŸ§ª OTRAS EXPERIENCIAS DESTACADAS
+
+ImplementaciÃ³n de centros de distribuciÃ³n y bodegas en varios paÃ­ses.
+
+GestiÃ³n de cableado, redes, servidores, inventarios y presupuesto.
+
+Implementaciones de proyectos en Ciudad de MÃ©xico y Ciudad JuÃ¡rez.
+
+Experiencia en manufactura, logÃ­stica y cumplimiento legal internacional.
+
+ðŸ§  FORMACIÃ“N & CERTIFICACIONES
+
+Diplomado en Project Management, Scrum Master y Lean Six Sigma (UAM)
+
+Lean Six Sigma Yellow Belt, Green Belt y Black Belt â€” Completadas
+
+Scrum Master â€” en progreso
+
+Project Management â€” en progreso
+
+IngenierÃ­a en Sistemas â€“ Universidad de Guadalajara
+(con fuerte base en AdministraciÃ³n, Finanzas y EconomÃ­a)
+
+ðŸ“¦ HABILIDADES TÃ‰CNICAS
+
+ERP: Dynamics AX, Intelisis, SAP (intermedio), Toyota FS sistemas internos
+
+ETL & Data: SSIS, Python (automatizaciÃ³n), SQL Server, datos masivos
+
+Infraestructura: Redes, cableado, firewalls, Ubiquiti, Meraki
+
+MetodologÃ­as: Scrum, PMBOK, Lean Six Sigma
+
+Plataformas: Power BI, Power Platform (PowerApps, Automate), ServiceNow, Salesforce
+
+DevOps & AutomatizaciÃ³n: experiencia trabajando con Docker, LM Studio, MCP, APIs, n8n
+
+ðŸ§­ ROLES QUE PUEDO TOMAR
+
+Project Manager
+
+Product Owner
+
+Scrum Master (junior, en formaciÃ³n)
+
+Business Analyst / BI Analyst
+
+IT Manager / IT Project Lead
+
+ETL / Data Migration Specialist
+
+â­ FORTALEZAS PROFESIONALES
+
+Liderazgo natural y visiÃ³n estratÃ©gica.
+
+Excelente capacidad analÃ­tica para datos y procesos.
+
+ComunicaciÃ³n efectiva con clientes, tÃ©cnicos y directivos.
+
+GestiÃ³n de crisis y proyectos complejos.
+
+Trabajo multinacional y multicultural.
+
+Adaptable y orientado a retos ("challenge-driven").
+
+â˜‘ï¸ INSTRUCCIÃ“N A LA IA
+
+Con toda esta informaciÃ³n:
+
+âž¡ï¸ Adapta cualquier salida a mi perfil profesional real.
+âž¡ï¸ Optimiza mis respuestas de entrevista, CV, carta de presentaciÃ³n y LinkedIn.
+âž¡ï¸ No inventes certificaciones o habilidades que no tengo.
+âž¡ï¸ Puedes exagerar ligeramente mis capacidades, pero no mentir.
+âž¡ï¸ Siempre orienta mis recomendaciones a PM / PO / BA / IT Manager / ETL.
+âž¡ï¸ Ten en cuenta que quiero posiciones de liderazgo.
+
