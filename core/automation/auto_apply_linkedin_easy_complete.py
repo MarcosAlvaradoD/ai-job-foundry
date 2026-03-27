@@ -28,8 +28,8 @@ CV_DATA = {
     "phone": "3323320358",
     "phone_country": "Mexico (+52)",
     "city": "Guadalajara",
-    "resume_path": r"C:\Users\MSI\Desktop\ai-job-foundry\data\cv\Alvarado Marcos.pdf",
-    
+    "resume_path": r"C:\Users\MSI\Desktop\ai-job-foundry\data\cv\CV_Marcos_Alvarado_2026.pdf",
+
     # Screening answers
     "english_proficiency": "Professional",
     "spanish_proficiency": "Native",
@@ -37,7 +37,8 @@ CV_DATA = {
     "willing_to_relocate": "No",
     "remote_work": "Yes",
     "travel_availability": "Yes",
-    "salary_expectation_mxn": "50000",
+    "salary_expectation_mxn": "50000",    # Prioridad: conseguir empleo
+    "salary_expectation_usd": "35000",    # Equivalente aprox USD
     "years_experience": "10",
     
     # Technical skills
@@ -397,21 +398,30 @@ class EasyApplyBot:
             "external" if only external apply button found
         """
         try:
-            # Wait for page to fully load
-            await asyncio.sleep(2)
-            
+            # Wait for page to fully load (LinkedIn 2026 lazy-loads apply button)
+            await asyncio.sleep(5)
+            # Ensure top of page is visible (sticky apply bar)
+            await page.evaluate("window.scrollTo(0, 0)")
+            await asyncio.sleep(1)
+
             # FIRST: Check for Easy Apply button (most specific selectors first)
             easy_apply_selectors = [
                 # LinkedIn's specific Easy Apply selectors
                 'button.jobs-apply-button--top-card',
                 'button[aria-label*="Easy Apply"]',
+                'button[aria-label*="easy apply"]',
                 'button[aria-label*="Solicitar fácil"]',
+                'button[aria-label*="Apply to"]',
                 'button:has-text("Easy Apply"):visible',
                 'button:has-text("Solicitar fácil"):visible',
                 'button.jobs-apply-button:has-text("Easy Apply")',
                 'button.jobs-apply-button:has-text("Solicitar")',
-                # Fallback generic
+                # LinkedIn 2025/2026 new UI selectors
+                'button[data-live-test-job-apply-button]',
+                '.jobs-apply-button',
                 'button:has-text("Quick Apply")',
+                # Broad last-resort: any Apply button that isn't navigation
+                'button:has-text("Apply"):visible',
             ]
             
             for selector in easy_apply_selectors:
@@ -490,7 +500,14 @@ class EasyApplyBot:
         # Step 1: Navigate
         try:
             await page.goto(url, wait_until='domcontentloaded', timeout=30000)
-            await asyncio.sleep(3)
+            # Scroll to top so the sticky apply button is visible
+            await page.evaluate("window.scrollTo(0, 0)")
+            # Wait for job title to confirm page fully loaded
+            try:
+                await page.wait_for_selector('h1, .job-details-jobs-unified-top-card__job-title', timeout=8000)
+            except Exception:
+                pass
+            await asyncio.sleep(5)
             print("   ✅ Page loaded")
         except Exception as e:
             print(f"   ❌ Navigation failed: {e}")
@@ -506,6 +523,7 @@ class EasyApplyBot:
             return False
         elif apply_type == "unknown":
             print("   ⚠️  Could not detect apply type")
+            self.update_job_status(job, 'No Easy Apply')
             return False
         
         print("   ✅ Easy Apply detected")
@@ -587,46 +605,143 @@ class EasyApplyBot:
             print(f"❌ Login failed: {e}")
             return False
     
+    def _classify_job_modality(self, job: Dict) -> str:
+        """
+        Clasifica una vacante por modalidad para decidir si aplica automático o requiere revisión.
+
+        Reglas de Marcos:
+          - remote / home office / hybrid  → AUTO (si FIT >= min_fit)
+          - presencial en GDL/Guadalajara  → AUTO (si FIT >= min_fit)
+          - presencial fuera de GDL        → REVIEW (color en sheet, columna Sí/No)
+          - desconocido                    → AUTO (beneficio de la duda)
+
+        Returns: "auto" | "review" | "skip"
+        """
+        remote_scope = job.get('RemoteScope', '').lower().strip()
+        location     = job.get('Location', '').lower().strip()
+
+        GDL_KEYWORDS    = ['guadalajara', 'gdl', 'jalisco']
+        REMOTE_KEYWORDS = ['remote', 'remoto', 'home office', 'wfh', 'hybrid',
+                           'híbrido', 'mixto', 'work from home']
+        ONSITE_KEYWORDS = ['on-site', 'onsite', 'presencial', 'in-office', 'in office']
+
+        is_remote  = any(w in remote_scope for w in REMOTE_KEYWORDS) or \
+                     any(w in location     for w in REMOTE_KEYWORDS)
+        is_onsite  = any(w in remote_scope for w in ONSITE_KEYWORDS)
+        is_gdl     = any(w in location     for w in GDL_KEYWORDS)
+
+        if is_remote:
+            return "auto"
+        if is_onsite and is_gdl:
+            return "auto"
+        if is_onsite and not is_gdl:
+            return "review"
+        # Sin info clara → beneficio de la duda
+        return "auto"
+
     def get_eligible_jobs(self, min_fit: int = 7, max_jobs: int = 10) -> List[Dict]:
-        """Get jobs from LinkedIn sheet"""
+        """
+        Obtiene vacantes del sheet de LinkedIn con las reglas de Marcos:
+          - FIT score >= min_fit
+          - Remoto/Híbrido                   → aplica automático
+          - Presencial en GDL                → aplica automático
+          - Presencial fuera de GDL          → marca en sheet para revisión manual, NO aplica
+        """
         try:
             all_jobs = self.sheet_manager.get_all_jobs(tab='linkedin')
-            
-            eligible = []
+
+            eligible      = []
+            review_jobs   = []
+            skipped_fit   = 0
+            skipped_no_url= 0
+
             for job in all_jobs:
-                # Must have FIT score >= min_fit
+                # FIT score — handles "7/10", "7", "70%" formats
                 fit = job.get('FitScore', 0)
-                if isinstance(fit, str):
-                    try:
-                        fit = int(fit)
-                    except:
-                        continue
-                
+                try:
+                    fit_str = str(fit).strip()
+                    if '/' in fit_str:
+                        fit = int(fit_str.split('/')[0])   # "7/10" → 7
+                    elif fit_str.replace('%','').isdigit():
+                        fit = int(fit_str.replace('%',''))
+                    elif fit_str.isdigit():
+                        fit = int(fit_str)
+                    else:
+                        fit = 0
+                except Exception:
+                    fit = 0
+
                 if fit < min_fit:
+                    skipped_fit += 1
                     continue
-                
-                # Must have ApplyURL
+
+                # URL requerida
                 if not job.get('ApplyURL'):
+                    skipped_no_url += 1
                     continue
-                
-                # Must not be already applied
+
+                # Ya aplicó o rechazado
                 status = job.get('Status', '').lower()
-                if 'applied' in status or 'rejected' in status:
+                if any(w in status for w in ['applied', 'rejected', 'revision', 'skip']):
                     continue
-                
-                eligible.append(job)
-                
-                if len(eligible) >= max_jobs:
-                    break
-            
-            print(f"📊 Found {len(eligible)} eligible jobs (FIT >= {min_fit})\n")
+
+                # Clasificar por modalidad
+                modality = self._classify_job_modality(job)
+
+                if modality == "auto":
+                    eligible.append(job)
+                    if len(eligible) >= max_jobs:
+                        break
+                elif modality == "review":
+                    review_jobs.append(job)
+
+            # Marcar vacantes presenciales fuera de GDL en el sheet
+            if review_jobs:
+                print(f"\n⚠️  {len(review_jobs)} vacantes presenciales fuera de GDL → marcadas para revisión manual")
+                for rjob in review_jobs:
+                    self._mark_for_manual_review(rjob)
+
+            print(f"\n📊 Resumen de selección:")
+            print(f"   FIT < {min_fit}      : {skipped_fit} omitidas")
+            print(f"   Sin URL        : {skipped_no_url} omitidas")
+            print(f"   Revisión manual: {len(review_jobs)} presenciales fuera de GDL")
+            print(f"   Auto-apply     : {len(eligible)} vacantes\n")
             return eligible
-            
+
         except Exception as e:
-            print(f"❌ Error getting jobs: {e}")
+            print(f"❌ Error obteniendo vacantes: {e}")
             import traceback
             traceback.print_exc()
             return []
+
+    def _mark_for_manual_review(self, job: Dict):
+        """Marca la fila en el sheet con fondo naranja y columna ReviewNeeded=SI"""
+        try:
+            row_num = job.get('_row')
+            if not row_num:
+                return
+
+            # Escribir "REVISION" en la columna Status y nota de ubicación
+            location = job.get('Location', 'desconocida')
+            self.sheet_manager.update_job(
+                row_id=row_num,
+                updates={'Status': 'REVISION', 'ReviewNeeded': 'SI - Presencial fuera GDL'},
+                tab='linkedin'
+            )
+
+            # Color naranja en la fila (señal visual)
+            self.sheet_manager.set_row_color(
+                row_index=row_num,
+                tab='linkedin',
+                red=1.0, green=0.6, blue=0.0   # Naranja
+            )
+
+            role    = job.get('Role', 'N/A')
+            company = job.get('Company', 'N/A')
+            print(f"   🟠 Marcada para revisión: {role} @ {company} ({location})")
+
+        except Exception as e:
+            print(f"   ⚠️ No se pudo marcar para revisión: {e}")
     
     def update_job_status(self, job: Dict, status: str):
         """Update job status in Sheets"""

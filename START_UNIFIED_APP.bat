@@ -1,6 +1,6 @@
 @echo off
 REM ==============================================================================
-REM AI JOB FOUNDRY - UNIFIED APP AUTO-STARTER
+REM AI JOB FOUNDRY - UNIFIED APP AUTO-STARTER (FIXED)
 REM 
 REM This script:
 REM 1. Runs system health checks
@@ -26,7 +26,19 @@ REM ============================================================================
 echo [1/4] Running system health check...
 echo.
 
-powershell.exe -ExecutionPolicy Bypass -File "startup_check_v3.ps1"
+REM Check which startup script exists
+if exist "scripts\powershell\startup_check_v3.ps1" (
+    powershell.exe -ExecutionPolicy Bypass -File "scripts\powershell\startup_check_v3.ps1"
+) else if exist "scripts\powershell\startup_check_v2.ps1" (
+    echo [INFO] Using startup_check_v2.ps1
+    powershell.exe -ExecutionPolicy Bypass -File "scripts\powershell\startup_check_v2.ps1"
+) else if exist "scripts\powershell\startup_check.ps1" (
+    echo [INFO] Using startup_check.ps1
+    powershell.exe -ExecutionPolicy Bypass -File "scripts\powershell\startup_check.ps1"
+) else (
+    echo [WARNING] No startup check script found, skipping...
+    goto :continue_anyway
+)
 
 if %ERRORLEVEL% NEQ 0 (
     echo.

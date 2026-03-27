@@ -44,6 +44,19 @@ class SheetManager:
             "glassdoor": "Glassdoor",
             "resumen": "Resumen"
         }
+
+        # Cache de headers por pestaña — evita leer A1:Z1 en cada operación
+        self._headers_cache: Dict[str, List[str]] = {}
+
+    def _get_headers(self, tab_name: str) -> List[str]:
+        """Obtiene los headers de una pestaña, usando cache para evitar HTTP 429."""
+        if tab_name not in self._headers_cache:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{tab_name}!A1:Z1"
+            ).execute()
+            self._headers_cache[tab_name] = result.get('values', [[]])[0]
+        return self._headers_cache[tab_name]
     
     def _get_credentials(self):
         """Obtiene credenciales OAuth de Google"""
@@ -151,14 +164,9 @@ class SheetManager:
         """
         tab_name = self.tabs.get(tab, "Registry")
         
-        # Obtener headers
-        result = self.service.spreadsheets().values().get(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{tab_name}!A1:Z1"
-        ).execute()
-        
-        headers = result.get('values', [[]])[0]
-        
+        # Obtener headers (cacheados)
+        headers = self._get_headers(tab_name)
+
         if not headers:
             raise Exception(f"No se encontraron headers en {tab_name}")
         
@@ -192,14 +200,9 @@ class SheetManager:
         """
         tab_name = self.tabs.get(tab, "Registry")
         
-        # Obtener headers
-        result = self.service.spreadsheets().values().get(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{tab_name}!A1:Z1"
-        ).execute()
-        
-        headers = result.get('values', [[]])[0]
-        
+        # Obtener headers (cacheados)
+        headers = self._get_headers(tab_name)
+
         # Actualizar columnas específicas
         for column_name, value in updates.items():
             if column_name in headers:
@@ -233,13 +236,8 @@ class SheetManager:
             tab_name = self.tabs.get(tab, "Registry")
             updates_dict = update_item['updates']
             
-            # Obtener headers de esta pestaña (podría cachear esto)
-            result = self.service.spreadsheets().values().get(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"{tab_name}!A1:Z1"
-            ).execute()
-            
-            headers = result.get('values', [[]])[0]
+            # Obtener headers de esta pestaña (cacheados)
+            headers = self._get_headers(tab_name)
             
             # Crear updates para batch
             for column_name, value in updates_dict.items():
@@ -311,13 +309,8 @@ class SheetManager:
         """
         tab_name = self.tabs.get(tab, "Registry")
         
-        # Get headers to find Status column
-        result = self.service.spreadsheets().values().get(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{tab_name}!A1:Z1"
-        ).execute()
-        
-        headers = result.get('values', [[]])[0]
+        # Get headers to find Status column (cacheados)
+        headers = self._get_headers(tab_name)
         
         if 'Status' not in headers:
             print(f"⚠️  Warning: Status column not found in {tab_name}")
@@ -336,6 +329,71 @@ class SheetManager:
         
         return True
     
+    def set_row_color(self, row_index: int, tab: str = "registry",
+                      red: float = 1.0, green: float = 0.6, blue: float = 0.0) -> bool:
+        """
+        Pinta el fondo de una fila completa con el color indicado.
+        Usado para marcar vacantes presenciales fuera de GDL (naranja por defecto).
+
+        Args:
+            row_index : fila 1-based (incluye header, datos empiezan en 2)
+            tab       : clave del dict self.tabs
+            red/green/blue : valores 0.0 - 1.0
+        """
+        try:
+            tab_name  = self.tabs.get(tab, "Registry")
+            sheet_id  = self._get_sheet_id(tab_name)
+            if sheet_id is None:
+                return False
+
+            # row_index es 1-based; Sheets API usa 0-based
+            zero_row = row_index - 1
+
+            body = {
+                "requests": [{
+                    "repeatCell": {
+                        "range": {
+                            "sheetId":       sheet_id,
+                            "startRowIndex": zero_row,
+                            "endRowIndex":   zero_row + 1
+                        },
+                        "cell": {
+                            "userEnteredFormat": {
+                                "backgroundColor": {
+                                    "red":   red,
+                                    "green": green,
+                                    "blue":  blue
+                                }
+                            }
+                        },
+                        "fields": "userEnteredFormat.backgroundColor"
+                    }
+                }]
+            }
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body=body
+            ).execute()
+            return True
+
+        except Exception as e:
+            print(f"⚠️  set_row_color error: {e}")
+            return False
+
+    def _get_sheet_id(self, tab_name: str) -> Optional[int]:
+        """Obtiene el sheetId numérico de una pestaña por nombre."""
+        try:
+            meta = self.service.spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id
+            ).execute()
+            for sheet in meta.get('sheets', []):
+                props = sheet.get('properties', {})
+                if props.get('title') == tab_name:
+                    return props.get('sheetId')
+        except Exception as e:
+            print(f"⚠️  _get_sheet_id error: {e}")
+        return None
+
     def test_connection(self):
         """Test rápido de conexión"""
         print("\n" + "="*70)
