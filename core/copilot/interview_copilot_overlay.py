@@ -4,30 +4,32 @@ INTERVIEW COPILOT OVERLAY - INVISIBLE DURANTE SCREEN SHARE
 Ventana flotante que NO aparece en grabaciones/Zoom/Teams/Meet.
 Funciona como APUNTADOR INVISIBLE durante videollamadas de trabajo.
 
-CARACTERÍSTICAS:
-  ✅ INVISIBLE en Zoom, Teams, Google Meet, OBS (WDA_EXCLUDEFROMCAPTURE)
-  ✅ Siempre encima de todas las ventanas
-  ✅ Semi-transparente, no molesta visualmente
-  ✅ Ctrl+Shift+H → Mostrar / Ocultar instantáneo
-  ✅ Escribe la pregunta → AI sugiere respuesta basada en TU CV
-  ✅ Botones de preguntas frecuentes (STAR, "cuéntame de ti", etc.)
-  ✅ Conecta a LM Studio local (Qwen2.5 14B) — sin enviar datos a internet
-  ✅ Carga CV automáticamente desde data/cv_descriptor.txt
+CARACTERISTICAS:
+  INVISIBLE en Zoom, Teams, Google Meet, OBS (WDA_EXCLUDEFROMCAPTURE)
+  Siempre encima de todas las ventanas
+  Semi-transparente, no molesta visualmente
+  VOZ: Ctrl+L mantener presionado para escuchar, soltar para procesar
+       SIN sonido de salida - solo texto en pantalla
+  Cargar perfil/job desde Google Sheets con boton dedicado
+  Botones de preguntas frecuentes (STAR, cuéntame de ti, etc.)
+  Conecta a LM Studio local (Qwen2.5 14B)
+  Carga CV automaticamente desde data/cv_descriptor.txt
 
-INSTALACIÓN (solo si falta algo):
-  pip install keyboard requests
+INSTALACION:
+  pip install SpeechRecognition sounddevice scipy keyboard
 
 USO:
   py core/copilot/interview_copilot_overlay.py
 
 HOTKEYS:
-  Ctrl+Shift+H   → Mostrar / Ocultar ventana completa
-  Enter          → Enviar pregunta al AI
-  Escape         → Limpiar / Cancelar
-  Ctrl+Q         → Cerrar copilot
+  Ctrl+L         -> MANTENER para escuchar / soltar para procesar
+  Ctrl+Shift+H   -> Mostrar / Ocultar ventana completa
+  Enter          -> Enviar texto al AI
+  Escape         -> Limpiar
+  Ctrl+Q         -> Cerrar
 
-Autor: AI Job Foundry — Marcos Alberto Alvarado
-Fecha: 2026-03-26
+Autor: AI Job Foundry - Marcos Alberto Alvarado
+Fecha: 2026-03-27
 """
 
 import sys
@@ -36,87 +38,100 @@ import json
 import threading
 import ctypes
 import tkinter as tk
-from tkinter import scrolledtext, font as tkfont
+from tkinter import scrolledtext
 from pathlib import Path
 from datetime import datetime
 
-# ─── Paths ──────────────────────────────────────────────────────────────────
+# ─── Paths ───────────────────────────────────────────────────────────────────
 PROJECT_ROOT = Path(__file__).parent.parent.parent
-CV_PATH = PROJECT_ROOT / "data" / "cv_descriptor.txt"
-LOG_PATH = PROJECT_ROOT / "logs" / "copilot_sessions"
+CV_PATH      = PROJECT_ROOT / "data" / "cv_descriptor.txt"
+LOG_PATH     = PROJECT_ROOT / "logs" / "copilot_sessions"
 
-# ─── LM Studio config (detecta IP automáticamente) ──────────────────────────
+# ─── LM Studio (detecta IP automaticamente) ──────────────────────────────────
 LM_STUDIO_HOSTS = [
-    "http://192.168.100.39:11434",   # IP actual del screenshot
-    "http://192.168.100.28:11434",   # IP del .env
-    "http://172.17.32.1:11434",      # Docker gateway
-    "http://127.0.0.1:11434",        # localhost
+    "http://192.168.100.39:11434",
+    "http://192.168.100.28:11434",
+    "http://172.17.32.1:11434",
+    "http://127.0.0.1:11434",
     "http://localhost:11434",
-    "http://192.168.100.39:1234",    # Puerto alternativo LM Studio
+    "http://192.168.100.39:1234",
     "http://127.0.0.1:1234",
 ]
 LM_STUDIO_MODEL = "qwen2.5-14b-instruct"
 
-# ─── Colores del tema (oscuro, discreto) ────────────────────────────────────
-BG_DARK     = "#0d1117"   # fondo principal
-BG_CARD     = "#161b22"   # fondo de tarjetas
-BG_INPUT    = "#21262d"   # fondo inputs
-FG_TEXT     = "#e6edf3"   # texto principal
-FG_MUTED    = "#8b949e"   # texto secundario
-ACCENT_BLUE = "#58a6ff"   # azul GitHub
-ACCENT_GRN  = "#3fb950"   # verde éxito
-ACCENT_YLW  = "#d29922"   # amarillo advertencia
-ACCENT_RED  = "#f85149"   # rojo error
-BORDER      = "#30363d"   # bordes
+# ─── Intentar importar librerias de voz ──────────────────────────────────────
+try:
+    import speech_recognition as sr
+    HAS_SR = True
+except ImportError:
+    HAS_SR = False
 
-# ─── Preguntas frecuentes de entrevista ─────────────────────────────────────
+try:
+    import sounddevice as sd
+    import numpy as np
+    import scipy.io.wavfile as wavfile
+    HAS_SD = True
+except ImportError:
+    HAS_SD = False
+
+# ─── Colores ─────────────────────────────────────────────────────────────────
+BG_DARK     = "#0d1117"
+BG_CARD     = "#161b22"
+BG_INPUT    = "#21262d"
+FG_TEXT     = "#e6edf3"
+FG_MUTED    = "#8b949e"
+ACCENT_BLUE = "#58a6ff"
+ACCENT_GRN  = "#3fb950"
+ACCENT_YLW  = "#d29922"
+ACCENT_RED  = "#f85149"
+BORDER      = "#30363d"
+ACCENT_VOICE = "#ff7b54"   # Naranja para indicador de voz
+
+# ─── Preguntas rapidas ────────────────────────────────────────────────────────
 QUICK_QUESTIONS = [
-    ("👤 Háblame de ti",           "Cuéntame de ti, tu background y experiencia"),
-    ("💪 Mayor fortaleza",          "¿Cuál es tu mayor fortaleza profesional?"),
-    ("📉 Mayor debilidad",          "¿Cuál es tu mayor debilidad y cómo la manejas?"),
-    ("🏆 Logro más importante",     "¿Cuál es tu logro profesional más importante?"),
-    ("⚔️ Manejo de conflictos",     "Cuéntame de una vez que manejaste un conflicto en el equipo"),
-    ("📊 Gestión de proyectos",     "¿Cómo manejas múltiples proyectos simultáneamente?"),
-    ("🔄 Cambio / adaptación",      "¿Puedes darme un ejemplo de adaptación a un cambio importante?"),
-    ("💰 Expectativa salarial",     "¿Cuál es tu expectativa de compensación?"),
-    ("🎯 Por qué este rol",         "¿Por qué quieres este puesto específico?"),
-    ("🚀 Dónde te ves en 5 años",  "¿Dónde te ves en 5 años?"),
-    ("❓ Preguntas al entrevistador","¿Tienes alguna pregunta para nosotros?"),
+    ("Háblame de ti",        "Cuéntame de ti, tu background y experiencia profesional"),
+    ("Mayor fortaleza",      "Cuál es tu mayor fortaleza profesional?"),
+    ("Mayor debilidad",      "Cuál es tu mayor debilidad y cómo la manejas?"),
+    ("Logro importante",     "Cuál es tu logro profesional más importante?"),
+    ("Conflictos",           "Cuéntame de una vez que manejaste un conflicto en el equipo"),
+    ("Gestión proyectos",    "Cómo manejas múltiples proyectos simultáneamente?"),
+    ("Cambio/adaptación",    "Ejemplo de adaptación a un cambio importante?"),
+    ("Salario esperado",     "Cuál es tu expectativa de compensación?"),
+    ("Por qué este rol",     "Por qué quieres este puesto específico?"),
+    ("5 años",               "Dónde te ves en 5 años?"),
+    ("Preguntas para ellos", "Qué preguntas tienes para nosotros?"),
 ]
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#   CLASE PRINCIPAL
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 class InterviewCopilotOverlay:
-    """
-    Copilot invisible para entrevistas.
-    La ventana NO aparece en captura de pantalla gracias a WDA_EXCLUDEFROMCAPTURE.
-    """
 
     def __init__(self):
-        self.cv_content = self._load_cv()
-        self.lm_url = None
-        self.job_context = None
-        self.session_log = []
-        self.is_thinking = False
-        self.hidden = False
+        self.cv_content   = self._load_cv()
+        self.lm_url       = None
+        self.job_context  = None
+        self.session_log  = []
+        self.is_thinking  = False
+        self.is_listening = False
+        self._listen_thread = None
+        self._audio_frames  = []
 
-        # Crear ventana ANTES de aplicar el flag de invisibilidad
+        # Speech recognition
+        self.recognizer  = sr.Recognizer() if HAS_SR else None
+        self.microphone  = None   # Inicializar lazy para no bloquear el arranque
+
         self._build_ui()
         self._apply_capture_exclusion()
         self._detect_lm_studio()
 
-    # ─── Carga del CV ────────────────────────────────────────────────────────
+    # ─── CV ──────────────────────────────────────────────────────────────────
     def _load_cv(self) -> str:
         if CV_PATH.exists():
-            text = CV_PATH.read_text(encoding="utf-8", errors="ignore")
-            return text[:3000]  # Limitar contexto
+            return CV_PATH.read_text(encoding="utf-8", errors="ignore")[:3000]
         return ""
 
-    # ─── Detección de LM Studio ──────────────────────────────────────────────
+    # ─── LM Studio ───────────────────────────────────────────────────────────
     def _detect_lm_studio(self):
-        """Detecta qué IP tiene LM Studio corriendo (en background)."""
         threading.Thread(target=self._find_lm_studio, daemon=True).start()
 
     def _find_lm_studio(self):
@@ -130,194 +145,196 @@ class InterviewCopilotOverlay:
                 )
                 urllib.request.urlopen(req, timeout=2)
                 self.lm_url = host
-                self._status(f"✅ LM Studio: {host}", ACCENT_GRN)
+                self._status(f"LM Studio: {host}", ACCENT_GRN)
                 return
             except Exception:
                 continue
-        self._status("⚠️  LM Studio no encontrado — revisa que esté corriendo", ACCENT_YLW)
+        self._status("LM Studio no encontrado — verifica que este corriendo", ACCENT_YLW)
 
-    # ─── Windows: excluir de captura de pantalla ─────────────────────────────
+    # ─── Windows capture exclusion ───────────────────────────────────────────
     def _apply_capture_exclusion(self):
-        """
-        Usa SetWindowDisplayAffinity con WDA_EXCLUDEFROMCAPTURE (0x11).
-        La ventana es VISIBLE para el usuario pero INVISIBLE en:
-          - Zoom (compartir pantalla)
-          - Teams
-          - Google Meet
-          - OBS / Streamlabs
-          - Windows Game Bar / Xbox Capture
-        Requiere Windows 10 version 2004 (build 19041) o superior.
-        """
         try:
             hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
             if hwnd == 0:
                 hwnd = self.root.winfo_id()
             WDA_EXCLUDEFROMCAPTURE = 0x00000011
+            ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
+        except Exception:
+            pass
+
+    def _reapply_capture_exclusion(self):
+        try:
+            hwnd = ctypes.windll.user32.FindWindowW(None, "AI Copilot")
+            if not hwnd:
+                hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            WDA_EXCLUDEFROMCAPTURE = 0x00000011
             result = ctypes.windll.user32.SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE)
             if result:
-                self._status("🔒 INVISIBLE en screen capture activo", ACCENT_GRN)
-            else:
-                # Retry con HWND directo
-                hwnd2 = ctypes.windll.user32.FindWindowW(None, "AI Copilot")
-                if hwnd2:
-                    ctypes.windll.user32.SetWindowDisplayAffinity(hwnd2, WDA_EXCLUDEFROMCAPTURE)
-        except Exception as e:
-            self._status(f"⚠️  Capture exclusion no aplicada: {e}", ACCENT_YLW)
+                self._status("INVISIBLE en screen share activo", ACCENT_GRN)
+        except Exception:
+            pass
 
-    # ─── Construcción de la UI ────────────────────────────────────────────────
+    # ─── UI ──────────────────────────────────────────────────────────────────
     def _build_ui(self):
         self.root = tk.Tk()
         self.root.title("AI Copilot")
         self.root.configure(bg=BG_DARK)
 
-        # Posición: esquina superior derecha (puede arrastrarse)
         screen_w = self.root.winfo_screenwidth()
-        self.root.geometry(f"420x620+{screen_w - 440}+20")
-
-        # Siempre encima + semi-transparente
+        self.root.geometry(f"430x680+{screen_w - 450}+10")
         self.root.wm_attributes("-topmost", True)
-        self.root.wm_attributes("-alpha", 0.92)
-
-        # Sin barra de título estándar (más discreto)
+        self.root.wm_attributes("-alpha", 0.93)
         self.root.overrideredirect(True)
 
-        # Permitir arrastrar la ventana
         self.root.bind("<ButtonPress-1>", self._start_drag)
-        self.root.bind("<B1-Motion>", self._do_drag)
-        self._drag_x = 0
-        self._drag_y = 0
+        self.root.bind("<B1-Motion>",     self._do_drag)
+        self._drag_x = self._drag_y = 0
 
-        # Hotkeys globales (keyboard lib si está, sino tkinter)
         self._setup_hotkeys()
 
         # ── Header ──────────────────────────────────────────────────────────
-        header = tk.Frame(self.root, bg=BG_CARD, pady=6, cursor="fleur")
-        header.pack(fill="x")
-        header.bind("<ButtonPress-1>", self._start_drag)
-        header.bind("<B1-Motion>", self._do_drag)
+        hdr = tk.Frame(self.root, bg=BG_CARD, pady=5, cursor="fleur")
+        hdr.pack(fill="x")
+        hdr.bind("<ButtonPress-1>", self._start_drag)
+        hdr.bind("<B1-Motion>",     self._do_drag)
 
-        tk.Label(
-            header, text="🎯 AI Interview Copilot",
-            bg=BG_CARD, fg=FG_TEXT,
-            font=("Segoe UI", 11, "bold")
-        ).pack(side="left", padx=10)
+        tk.Label(hdr, text="AI Interview Copilot",
+                 bg=BG_CARD, fg=FG_TEXT,
+                 font=("Segoe UI", 10, "bold")).pack(side="left", padx=10)
 
-        # Botones de cabecera
-        btn_frame = tk.Frame(header, bg=BG_CARD)
-        btn_frame.pack(side="right", padx=6)
+        # Indicador de voz (siempre visible, cambia color)
+        self.voice_indicator = tk.Label(
+            hdr, text="MIC OFF",
+            bg=BORDER, fg=FG_MUTED,
+            font=("Segoe UI", 7, "bold"),
+            padx=6, pady=2, relief="flat"
+        )
+        self.voice_indicator.pack(side="left", padx=4)
 
-        self._btn(btn_frame, "─", self._minimize, BG_CARD, FG_MUTED, 2).pack(side="left")
-        self._btn(btn_frame, "✕", self._quit, BG_CARD, ACCENT_RED, 2).pack(side="left")
+        btns = tk.Frame(hdr, bg=BG_CARD)
+        btns.pack(side="right", padx=6)
+        self._btn(btns, "─", self.root.iconify, BG_CARD, FG_MUTED).pack(side="left")
+        self._btn(btns, "x", self._quit, BG_CARD, ACCENT_RED).pack(side="left")
 
-        # ── Status bar ──────────────────────────────────────────────────────
-        self.status_var = tk.StringVar(value="⏳ Iniciando...")
+        # ── Status ──────────────────────────────────────────────────────────
+        self.status_var = tk.StringVar(value="Iniciando...")
         self.status_lbl = tk.Label(
             self.root, textvariable=self.status_var,
             bg=BG_DARK, fg=FG_MUTED,
-            font=("Segoe UI", 8), anchor="w", padx=8
+            font=("Segoe UI", 7), anchor="w", padx=8
         )
         self.status_lbl.pack(fill="x")
 
-        # ── Job context pill ────────────────────────────────────────────────
+        # ── Job context badge ────────────────────────────────────────────────
         self.job_lbl = tk.Label(
-            self.root, text="📋 Sin job context — escribe el puesto abajo",
+            self.root, text="Sin job context — carga uno abajo",
             bg=BG_DARK, fg=ACCENT_YLW,
-            font=("Segoe UI", 8, "italic"), anchor="w", padx=8
+            font=("Segoe UI", 7, "italic"), anchor="w", padx=8
         )
         self.job_lbl.pack(fill="x")
 
-        # ── Respuesta del AI ─────────────────────────────────────────────────
-        resp_frame = tk.Frame(self.root, bg=BG_CARD, padx=6, pady=6)
+        # ── Respuesta AI ─────────────────────────────────────────────────────
+        resp_frame = tk.Frame(self.root, bg=BG_CARD, padx=6, pady=4)
         resp_frame.pack(fill="both", expand=True, padx=6, pady=(4, 2))
 
-        tk.Label(
-            resp_frame, text="💡 Sugerencia",
-            bg=BG_CARD, fg=ACCENT_BLUE,
-            font=("Segoe UI", 9, "bold"), anchor="w"
-        ).pack(fill="x")
+        tk.Label(resp_frame, text="Sugerencia AI",
+                 bg=BG_CARD, fg=ACCENT_BLUE,
+                 font=("Segoe UI", 8, "bold"), anchor="w").pack(fill="x")
 
         self.response_text = scrolledtext.ScrolledText(
             resp_frame,
             bg=BG_CARD, fg=FG_TEXT,
             font=("Segoe UI", 9),
-            wrap=tk.WORD,
-            relief="flat",
-            state="disabled",
-            height=12,
+            wrap=tk.WORD, relief="flat",
+            state="disabled", height=11,
             cursor="arrow",
             insertbackground=FG_TEXT
         )
-        self.response_text.pack(fill="both", expand=True, pady=(4, 0))
+        self.response_text.pack(fill="both", expand=True, pady=(3, 0))
 
-        # ── Botones rápidos ──────────────────────────────────────────────────
-        quick_frame = tk.LabelFrame(
-            self.root, text=" ⚡ Preguntas frecuentes ",
+        # ── Preguntas rapidas ─────────────────────────────────────────────────
+        qf = tk.LabelFrame(
+            self.root, text=" Preguntas frecuentes ",
             bg=BG_DARK, fg=FG_MUTED,
-            font=("Segoe UI", 8), bd=1, relief="flat",
-            padx=4, pady=4
+            font=("Segoe UI", 7), bd=1, relief="flat",
+            padx=3, pady=3
         )
-        quick_frame.pack(fill="x", padx=6, pady=(2, 2))
+        qf.pack(fill="x", padx=6, pady=(2, 2))
 
-        # Grid de botones 2 columnas
         for i, (label, question) in enumerate(QUICK_QUESTIONS):
             row, col = divmod(i, 2)
-            btn = tk.Button(
-                quick_frame,
-                text=label,
+            tk.Button(
+                qf, text=label,
                 bg=BG_INPUT, fg=FG_TEXT,
                 font=("Segoe UI", 7),
-                relief="flat", bd=0,
-                padx=4, pady=2,
+                relief="flat", bd=0, padx=3, pady=1,
                 cursor="hand2",
                 activebackground=BORDER, activeforeground=FG_TEXT,
                 command=lambda q=question: self._ask(q)
-            )
-            btn.grid(row=row, column=col, sticky="ew", padx=2, pady=1)
-        quick_frame.columnconfigure(0, weight=1)
-        quick_frame.columnconfigure(1, weight=1)
+            ).grid(row=row, column=col, sticky="ew", padx=1, pady=1)
+        qf.columnconfigure(0, weight=1)
+        qf.columnconfigure(1, weight=1)
 
-        # ── Input de pregunta ────────────────────────────────────────────────
-        input_frame = tk.Frame(self.root, bg=BG_DARK, padx=6, pady=4)
-        input_frame.pack(fill="x")
+        # ── Panel de voz + texto ─────────────────────────────────────────────
+        voice_frame = tk.Frame(self.root, bg=BG_DARK, padx=6, pady=2)
+        voice_frame.pack(fill="x")
+
+        # Boton de VOZ (mantener presionado)
+        voice_state = {"active": False}
+
+        self.voice_btn = tk.Button(
+            voice_frame,
+            text="MANTENER = ESCUCHAR  (Ctrl+L)",
+            bg=BG_INPUT, fg=FG_MUTED,
+            font=("Segoe UI", 8, "bold"),
+            relief="flat", bd=0,
+            padx=8, pady=5,
+            cursor="hand2",
+            activebackground=ACCENT_VOICE, activeforeground="#000"
+        )
+        self.voice_btn.pack(fill="x")
+
+        # Bind press/release del boton
+        self.voice_btn.bind("<ButtonPress-1>",   lambda e: self._start_listening())
+        self.voice_btn.bind("<ButtonRelease-1>", lambda e: self._stop_listening())
+
+        # Instruccion si no hay librerias
+        if not HAS_SR:
+            self.voice_btn.config(
+                text="Voz no disponible — pip install SpeechRecognition sounddevice scipy",
+                fg=ACCENT_RED
+            )
+
+        # ── Input de texto ───────────────────────────────────────────────────
+        inp_frame = tk.Frame(self.root, bg=BG_DARK, padx=6, pady=2)
+        inp_frame.pack(fill="x")
 
         self.input_var = tk.StringVar()
         self.input_entry = tk.Entry(
-            input_frame,
+            inp_frame,
             textvariable=self.input_var,
-            bg=BG_INPUT, fg=FG_TEXT,
+            bg=BG_INPUT, fg=FG_MUTED,
             font=("Segoe UI", 9),
             relief="flat", bd=4,
             insertbackground=FG_TEXT
         )
         self.input_entry.pack(side="left", fill="x", expand=True)
-        self.input_entry.bind("<Return>", lambda e: self._ask_from_input())
-        self.input_entry.bind("<Escape>", lambda e: self._clear())
-        self.input_entry.insert(0, "Escribe la pregunta del entrevistador...")
-        self.input_entry.config(fg=FG_MUTED)
-        self.input_entry.bind("<FocusIn>", self._clear_placeholder)
-        self.input_entry.bind("<FocusOut>", self._restore_placeholder)
+        self.input_entry.bind("<Return>",  lambda e: self._ask_from_input())
+        self.input_entry.bind("<Escape>",  lambda e: self._clear())
+        self.input_entry.bind("<FocusIn>", self._ph_clear)
+        self.input_entry.bind("<FocusOut>",self._ph_restore)
+        self._placeholder = "Escribe la pregunta..."
+        self.input_entry.insert(0, self._placeholder)
 
-        send_btn = tk.Button(
-            input_frame,
-            text="➤",
-            bg=ACCENT_BLUE, fg=BG_DARK,
-            font=("Segoe UI", 10, "bold"),
-            relief="flat", bd=0,
-            padx=8, pady=0,
-            cursor="hand2",
-            activebackground=FG_TEXT,
-            command=self._ask_from_input
-        )
-        send_btn.pack(side="left", padx=(4, 0))
+        self._btn(inp_frame, "->", self._ask_from_input, ACCENT_BLUE, BG_DARK, 8).pack(side="left", padx=(3,0))
 
-        # ── Job context input ────────────────────────────────────────────────
-        # FIX: pady tuple no es válido en Frame constructor — moverlo a pack()
-        job_input_frame = tk.Frame(self.root, bg=BG_DARK, padx=6)
-        job_input_frame.pack(fill="x", pady=(0, 6))
+        # ── Job context / perfil ─────────────────────────────────────────────
+        job_frame = tk.Frame(self.root, bg=BG_DARK, padx=6)
+        job_frame.pack(fill="x", pady=(0, 4))
 
         self.job_input_var = tk.StringVar()
         job_entry = tk.Entry(
-            job_input_frame,
+            job_frame,
             textvariable=self.job_input_var,
             bg=BG_INPUT, fg=FG_MUTED,
             font=("Segoe UI", 8),
@@ -325,86 +342,321 @@ class InterviewCopilotOverlay:
             insertbackground=FG_TEXT
         )
         job_entry.pack(side="left", fill="x", expand=True)
-        job_entry.insert(0, "Empresa / Puesto (ej: TCS — Project Manager)")
-        job_entry.bind("<FocusIn>", lambda e: (job_entry.delete(0, "end"), job_entry.config(fg=FG_TEXT)))
-        job_entry.bind("<Return>", lambda e: self._set_job_context())
+        job_entry.insert(0, "Empresa / Puesto  (ej: TCS — PM)")
+        job_entry.bind("<FocusIn>",  lambda e: (job_entry.delete(0,"end"), job_entry.config(fg=FG_TEXT)))
+        job_entry.bind("<Return>",   lambda e: self._set_job_context())
 
-        tk.Button(
-            job_input_frame,
-            text="Set",
-            bg=BORDER, fg=FG_TEXT,
-            font=("Segoe UI", 8),
-            relief="flat", bd=0,
-            padx=6, pady=0,
-            cursor="hand2",
-            command=self._set_job_context
-        ).pack(side="left", padx=(4, 0))
+        self._btn(job_frame, "Set",
+                  self._set_job_context, BORDER, FG_TEXT, 5).pack(side="left", padx=(2,0))
+        self._btn(job_frame, "Sheets",
+                  self._load_job_from_sheets_async, ACCENT_BLUE, BG_DARK, 5).pack(side="left", padx=(2,0))
 
-        # ── Hotkey hint ──────────────────────────────────────────────────────
+        # ── Hint ─────────────────────────────────────────────────────────────
         tk.Label(
             self.root,
-            text="Ctrl+Shift+H = Ocultar/Mostrar  |  Invisible en Zoom/Teams/Meet",
-            bg=BG_DARK, fg=BORDER,
-            font=("Segoe UI", 7)
-        ).pack(pady=(0, 4))
+            text="Ctrl+L=Escuchar  Ctrl+Shift+H=Ocultar  Invisible en Zoom/Teams",
+            bg=BG_DARK, fg=BORDER, font=("Segoe UI", 6)
+        ).pack(pady=(0, 3))
 
     # ─── Hotkeys ─────────────────────────────────────────────────────────────
     def _setup_hotkeys(self):
-        """Configura hotkeys globales."""
         try:
             import keyboard
-            keyboard.add_hotkey("ctrl+shift+h", self._toggle_visibility, suppress=False)
-            keyboard.add_hotkey("ctrl+q", self._quit, suppress=False)
+            keyboard.add_hotkey("ctrl+l",         self._hotkey_voice_start, suppress=False)
+            keyboard.on_release_key("l",          self._hotkey_voice_stop)
+            keyboard.add_hotkey("ctrl+shift+h",   self._toggle_visibility,  suppress=False)
+            keyboard.add_hotkey("ctrl+q",         self._quit,               suppress=False)
         except ImportError:
-            # Fallback: solo hotkeys dentro de la ventana
+            self.root.bind("<Control-l>", lambda e: self._toggle_listening())
             self.root.bind("<Control-h>", lambda e: self._toggle_visibility())
             self.root.bind("<Control-q>", lambda e: self._quit())
 
+    def _hotkey_voice_start(self):
+        if not self.is_listening:
+            self.root.after(0, self._start_listening)
+
+    def _hotkey_voice_stop(self, event=None):
+        if self.is_listening:
+            self.root.after(0, self._stop_listening)
+
     def _toggle_visibility(self):
-        """Alterna visibilidad — funciona incluso desde otra app."""
-        if self.hidden:
+        if self.root.state() == 'withdrawn':
             self.root.after(0, self.root.deiconify)
             self.root.after(0, lambda: self.root.wm_attributes("-topmost", True))
-            self.hidden = False
         else:
             self.root.after(0, self.root.withdraw)
-            self.hidden = True
+
+    # ─── VOZ: Grabar con sounddevice (mas confiable en Windows) ──────────────
+    def _start_listening(self):
+        if self.is_listening or not HAS_SR or not HAS_SD:
+            if not HAS_SR or not HAS_SD:
+                self._status("Instala: pip install SpeechRecognition sounddevice scipy", ACCENT_RED)
+            return
+        self.is_listening = True
+        self._audio_frames = []
+
+        # UI feedback
+        self.voice_btn.config(bg=ACCENT_VOICE, fg="#000",
+                              text="ESCUCHANDO... (suelta para procesar)")
+        self.voice_indicator.config(bg=ACCENT_VOICE, fg="#000", text="MIC ON")
+        self._status("Escuchando... habla ahora", ACCENT_VOICE)
+
+        # Iniciar grabacion en thread
+        self._listen_thread = threading.Thread(target=self._record_audio, daemon=True)
+        self._listen_thread.start()
+
+    def _record_audio(self):
+        """Graba audio con sounddevice mientras is_listening sea True."""
+        SAMPLE_RATE = 16000
+        CHANNELS = 1
+        frames = []
+        try:
+            with sd.InputStream(samplerate=SAMPLE_RATE, channels=CHANNELS,
+                                dtype="int16") as stream:
+                while self.is_listening:
+                    data, _ = stream.read(1024)
+                    frames.append(data.copy())
+            self._audio_frames = frames
+        except Exception as e:
+            self.root.after(0, lambda: self._status(f"Error mic: {e}", ACCENT_RED))
+            self.is_listening = False
+            self._reset_voice_ui()
+
+    def _stop_listening(self):
+        if not self.is_listening:
+            return
+        self.is_listening = False
+
+        self.voice_btn.config(bg=BG_INPUT, fg=FG_MUTED,
+                              text="MANTENER = ESCUCHAR  (Ctrl+L)")
+        self.voice_indicator.config(bg=BORDER, fg=FG_MUTED, text="MIC OFF")
+        self._status("Procesando audio...", ACCENT_BLUE)
+
+        threading.Thread(target=self._transcribe_and_ask, daemon=True).start()
+
+    def _transcribe_and_ask(self):
+        """Transcribe el audio grabado y lo envia al AI."""
+        import io, wave, tempfile
+        if not self._audio_frames:
+            self.root.after(0, lambda: self._status("Sin audio grabado", ACCENT_YLW))
+            return
+
+        SAMPLE_RATE = 16000
+        try:
+            # Guardar frames en archivo WAV temporal
+            frames_np = np.concatenate(self._audio_frames, axis=0)
+            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+                tmp_path = tmp.name
+            wavfile.write(tmp_path, SAMPLE_RATE, frames_np)
+
+            # Transcribir con SpeechRecognition
+            with sr.AudioFile(tmp_path) as source:
+                audio_data = self.recognizer.record(source)
+
+            # Intentar Google Web Speech (requiere internet, gratuito)
+            try:
+                text = self.recognizer.recognize_google(audio_data, language="es-MX")
+            except sr.UnknownValueError:
+                # Fallback: intentar en ingles
+                try:
+                    text = self.recognizer.recognize_google(audio_data, language="en-US")
+                except sr.UnknownValueError:
+                    self.root.after(0, lambda: self._status("No se entendio el audio — intenta de nuevo", ACCENT_YLW))
+                    return
+            except sr.RequestError:
+                self.root.after(0, lambda: self._status("Sin conexion para transcribir — escribe la pregunta", ACCENT_YLW))
+                return
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except Exception:
+                    pass
+
+            if text:
+                # Mostrar transcripcion en el input
+                self.root.after(0, lambda t=text: (
+                    self.input_var.set(t),
+                    self.input_entry.config(fg=FG_TEXT)
+                ))
+                self.root.after(0, lambda: self._status(f"Transcripcion: {text[:50]}", ACCENT_GRN))
+                # Enviar al AI
+                self.root.after(200, lambda t=text: self._ask(t))
+
+        except Exception as e:
+            self.root.after(0, lambda: self._status(f"Error transcripcion: {e}", ACCENT_RED))
+
+    def _reset_voice_ui(self):
+        self.voice_btn.config(bg=BG_INPUT, fg=FG_MUTED,
+                              text="MANTENER = ESCUCHAR  (Ctrl+L)")
+        self.voice_indicator.config(bg=BORDER, fg=FG_MUTED, text="MIC OFF")
+
+    def _toggle_listening(self):
+        if self.is_listening:
+            self._stop_listening()
+        else:
+            self._start_listening()
+
+    # ─── Cargar job desde Sheets ──────────────────────────────────────────────
+    def _load_job_from_sheets_async(self):
+        """Inicia carga de jobs desde Google Sheets en background."""
+        self._status("Cargando jobs del Sheet...", ACCENT_BLUE)
+        threading.Thread(target=self._fetch_top_jobs, daemon=True).start()
+
+    def _fetch_top_jobs(self):
+        """Lee jobs FIT>=7 del Sheet y los muestra para seleccionar."""
+        try:
+            sys.path.insert(0, str(PROJECT_ROOT))
+            from dotenv import load_dotenv
+            load_dotenv(PROJECT_ROOT / ".env")
+            from google.oauth2.credentials import Credentials
+            from google.auth.transport.requests import Request
+            from googleapiclient.discovery import build
+
+            token_path = PROJECT_ROOT / "data" / "credentials" / "token.json"
+            if not token_path.exists():
+                self.root.after(0, lambda: self._status("No hay token OAuth — regenera credenciales (opcion 21)", ACCENT_RED))
+                return
+
+            creds = Credentials.from_authorized_user_file(str(token_path))
+            if creds.expired and creds.refresh_token:
+                creds.refresh(Request())
+
+            service = build("sheets", "v4", credentials=creds)
+            sheet_id = os.getenv("GOOGLE_SHEETS_ID", "1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg")
+
+            result = service.spreadsheets().values().get(
+                spreadsheetId=sheet_id,
+                range="LinkedIn!A1:R200"
+            ).execute()
+            values = result.get("values", [])
+            if not values:
+                self.root.after(0, lambda: self._status("Sheet vacio", ACCENT_YLW))
+                return
+
+            headers = values[0]
+            col_role    = headers.index("Role")      if "Role"      in headers else 2
+            col_company = headers.index("Company")   if "Company"   in headers else 1
+            col_fit     = next((i for i,h in enumerate(headers) if "fit" in h.lower()), 17)
+            col_url     = headers.index("ApplyURL")  if "ApplyURL"  in headers else 5
+
+            def safe_fit(v):
+                try:
+                    s = str(v).strip()
+                    return int(s.split("/")[0]) if "/" in s else int(float(s))
+                except: return 0
+
+            jobs = []
+            for row in values[1:]:
+                if len(row) <= col_fit: continue
+                fit = safe_fit(row[col_fit] if col_fit < len(row) else 0)
+                if fit >= 7:
+                    jobs.append({
+                        "role":    row[col_role]    if col_role    < len(row) else "?",
+                        "company": row[col_company] if col_company < len(row) else "?",
+                        "fit":     fit,
+                        "url":     row[col_url]     if col_url     < len(row) else "",
+                    })
+
+            jobs.sort(key=lambda j: j["fit"], reverse=True)
+            top = jobs[:12]
+
+            if not top:
+                self.root.after(0, lambda: self._status("Sin jobs FIT>=7 en LinkedIn tab", ACCENT_YLW))
+                return
+
+            self.root.after(0, lambda: self._show_job_selector(top))
+
+        except Exception as e:
+            self.root.after(0, lambda: self._status(f"Error Sheets: {e}", ACCENT_RED))
+
+    def _show_job_selector(self, jobs: list):
+        """Ventana emergente para elegir job de la lista."""
+        popup = tk.Toplevel(self.root)
+        popup.title("Seleccionar Job")
+        popup.configure(bg=BG_DARK)
+        popup.wm_attributes("-topmost", True)
+        popup.geometry("420x360")
+
+        tk.Label(popup, text="Selecciona el job para esta entrevista:",
+                 bg=BG_DARK, fg=FG_TEXT,
+                 font=("Segoe UI", 9, "bold")).pack(padx=10, pady=(10,4))
+
+        lb_frame = tk.Frame(popup, bg=BG_DARK)
+        lb_frame.pack(fill="both", expand=True, padx=10, pady=4)
+
+        scrollbar = tk.Scrollbar(lb_frame, bg=BORDER)
+        scrollbar.pack(side="right", fill="y")
+
+        listbox = tk.Listbox(
+            lb_frame,
+            bg=BG_CARD, fg=FG_TEXT,
+            font=("Segoe UI", 9),
+            selectbackground=ACCENT_BLUE, selectforeground=BG_DARK,
+            relief="flat", bd=0,
+            yscrollcommand=scrollbar.set
+        )
+        listbox.pack(side="left", fill="both", expand=True)
+        scrollbar.config(command=listbox.yview)
+
+        for j in jobs:
+            listbox.insert("end", f"[{j['fit']}/10]  {j['company'][:20]} - {j['role'][:35]}")
+
+        def confirm():
+            sel = listbox.curselection()
+            if sel:
+                j = jobs[sel[0]]
+                context = f"{j['company']} — {j['role']}"
+                self.job_context = context
+                self.job_lbl.config(text=f"Job: {context[:65]}", fg=ACCENT_GRN)
+                self.job_input_var.set(context)
+                self._status(f"Contexto: {context[:45]}", ACCENT_GRN)
+            popup.destroy()
+
+        btn_frame = tk.Frame(popup, bg=BG_DARK)
+        btn_frame.pack(fill="x", padx=10, pady=8)
+        self._btn(btn_frame, "Seleccionar", confirm, ACCENT_BLUE, BG_DARK, 12).pack(side="left")
+        self._btn(btn_frame, "Cancelar",    popup.destroy, BORDER,      FG_TEXT, 8).pack(side="left", padx=4)
+        listbox.bind("<Double-Button-1>", lambda e: confirm())
+
+    # ─── Job context manual ───────────────────────────────────────────────────
+    def _set_job_context(self):
+        v = self.job_input_var.get().strip()
+        if v and v != "Empresa / Puesto  (ej: TCS — PM)":
+            self.job_context = v
+            self.job_lbl.config(text=f"Job: {v[:65]}", fg=ACCENT_GRN)
+            self._status(f"Contexto: {v[:40]}", ACCENT_GRN)
 
     # ─── Drag ────────────────────────────────────────────────────────────────
-    def _start_drag(self, event):
-        self._drag_x = event.x_root - self.root.winfo_x()
-        self._drag_y = event.y_root - self.root.winfo_y()
+    def _start_drag(self, e):
+        self._drag_x = e.x_root - self.root.winfo_x()
+        self._drag_y = e.y_root - self.root.winfo_y()
 
-    def _do_drag(self, event):
-        x = event.x_root - self._drag_x
-        y = event.y_root - self._drag_y
-        self.root.geometry(f"+{x}+{y}")
+    def _do_drag(self, e):
+        self.root.geometry(f"+{e.x_root - self._drag_x}+{e.y_root - self._drag_y}")
 
     # ─── Helpers UI ──────────────────────────────────────────────────────────
     def _btn(self, parent, text, command, bg, fg, padx=6):
         return tk.Button(
             parent, text=text, command=command,
             bg=bg, fg=fg,
-            font=("Segoe UI", 9),
-            relief="flat", bd=0,
-            padx=padx, pady=2,
-            cursor="hand2",
+            font=("Segoe UI", 8), relief="flat", bd=0,
+            padx=padx, pady=2, cursor="hand2",
             activebackground=BORDER, activeforeground=FG_TEXT
         )
 
-    def _status(self, msg: str, color: str = FG_MUTED):
+    def _status(self, msg, color=FG_MUTED):
         self.root.after(0, lambda: (
             self.status_var.set(msg),
             self.status_lbl.config(fg=color)
         ))
 
-    def _set_response(self, text: str):
+    def _set_response(self, text):
         self.response_text.config(state="normal")
         self.response_text.delete("1.0", "end")
         self.response_text.insert("1.0", text)
         self.response_text.config(state="disabled")
 
-    def _append_response(self, chunk: str):
+    def _append_response(self, chunk):
         self.response_text.config(state="normal")
         self.response_text.insert("end", chunk)
         self.response_text.see("end")
@@ -414,103 +666,72 @@ class InterviewCopilotOverlay:
         self._set_response("")
         self.input_var.set("")
 
-    def _minimize(self):
-        self.root.iconify()
+    def _ph_clear(self, e):
+        if self.input_entry.get() == self._placeholder:
+            self.input_entry.delete(0, "end")
+            self.input_entry.config(fg=FG_TEXT)
+
+    def _ph_restore(self, e):
+        if not self.input_entry.get():
+            self.input_entry.insert(0, self._placeholder)
+            self.input_entry.config(fg=FG_MUTED)
 
     def _quit(self):
         self._save_session_log()
         self.root.destroy()
 
-    def _clear_placeholder(self, event):
-        if self.input_entry.get() == "Escribe la pregunta del entrevistador...":
-            self.input_entry.delete(0, "end")
-            self.input_entry.config(fg=FG_TEXT)
-
-    def _restore_placeholder(self, event):
-        if not self.input_entry.get():
-            self.input_entry.insert(0, "Escribe la pregunta del entrevistador...")
-            self.input_entry.config(fg=FG_MUTED)
-
-    # ─── Job context ─────────────────────────────────────────────────────────
-    def _set_job_context(self):
-        value = self.job_input_var.get().strip()
-        if value and value != "Empresa / Puesto (ej: TCS — Project Manager)":
-            self.job_context = value
-            self.job_lbl.config(
-                text=f"📋 Job: {value[:60]}",
-                fg=ACCENT_GRN
-            )
-            self._status(f"✅ Contexto: {value[:40]}", ACCENT_GRN)
-
-    # ─── Lógica AI ───────────────────────────────────────────────────────────
+    # ─── AI ──────────────────────────────────────────────────────────────────
     def _ask_from_input(self):
-        question = self.input_var.get().strip()
-        if not question or question == "Escribe la pregunta del entrevistador...":
+        q = self.input_var.get().strip()
+        if not q or q == self._placeholder:
             return
         self.input_var.set("")
         self.input_entry.config(fg=FG_TEXT)
-        self._ask(question)
+        self._ask(q)
 
     def _ask(self, question: str):
-        """Envía pregunta al AI y muestra respuesta en streaming."""
         if self.is_thinking:
             return
         if not self.lm_url:
-            self._set_response("⚠️  LM Studio no disponible.\n\nAsegúrate de que LM Studio esté corriendo con el modelo cargado.")
+            self._set_response("LM Studio no disponible.\n\nAsegurate de que este corriendo con el modelo cargado.")
             return
-
         self.is_thinking = True
-        self._set_response("⏳ Pensando...")
-        self._status("🤔 Consultando AI...", ACCENT_BLUE)
-
-        # Log
-        self.session_log.append({
-            "timestamp": datetime.now().isoformat(),
-            "question": question,
-            "response": ""
-        })
-
-        threading.Thread(
-            target=self._call_lm_studio,
-            args=(question,),
-            daemon=True
-        ).start()
+        self._set_response("Pensando...")
+        self._status("Consultando AI...", ACCENT_BLUE)
+        self.session_log.append({"timestamp": datetime.now().isoformat(),
+                                  "question": question, "response": ""})
+        threading.Thread(target=self._call_lm_studio, args=(question,), daemon=True).start()
 
     def _build_system_prompt(self) -> str:
         prompt = """Eres un asistente experto para entrevistas de trabajo.
-Tu rol es ayudar al candidato a responder preguntas de entrevista de forma clara y persuasiva.
+Tu rol: ayudar al candidato a responder preguntas de forma clara y persuasiva.
 
-INSTRUCCIONES CRÍTICAS:
-- Respuesta CORTA y DIRECTA (máx 5-6 oraciones)
-- Usa ejemplos concretos del CV del candidato cuando sea posible
-- Formato: primero la idea central, luego el ejemplo/evidencia
-- Enfoque en logros cuantificables (números, porcentajes, impacto)
-- Lenguaje natural, no robótico
-- Si es pregunta STAR (situación/comportamental), usa ese formato brevemente
-- NO digas "Como PM..." o "Como candidato..." — responde EN VOZ del candidato
+INSTRUCCIONES:
+- Respuesta CORTA (max 5 oraciones)
+- Usa ejemplos concretos del CV del candidato
+- Logros con numeros cuando sea posible
+- STAR method para preguntas comportamentales
+- Responde en primera persona, como si fueras el candidato hablando
+- No digas "Como candidato..." — habla directamente
 """
         if self.cv_content:
-            prompt += f"\n\nCV / PERFIL DEL CANDIDATO:\n{self.cv_content[:2500]}"
-
+            prompt += f"\n\nCV / PERFIL:\n{self.cv_content[:2500]}"
         if self.job_context:
             prompt += f"\n\nPUESTO AL QUE APLICA: {self.job_context}"
-
         return prompt
 
     def _call_lm_studio(self, question: str):
-        """Llama a LM Studio API con streaming."""
         import urllib.request, urllib.error
         import json as _json
 
-        system_prompt = self._build_system_prompt()
         payload = _json.dumps({
             "model": LM_STUDIO_MODEL,
             "messages": [
-                {"role": "system", "content": system_prompt},
-                {"role": "user", "content": question}
+                {"role": "system", "content": self._build_system_prompt()},
+                {"role": "user",   "content": question}
             ],
-            "temperature": 0.5,
-            "max_tokens": 350,
+            "temperature": 0.45,
+            "max_tokens": 320,
             "stream": True
         }).encode("utf-8")
 
@@ -518,67 +739,49 @@ INSTRUCCIONES CRÍTICAS:
             req = urllib.request.Request(
                 f"{self.lm_url}/v1/chat/completions",
                 data=payload,
-                headers={
-                    "Content-Type": "application/json",
-                    "Accept": "text/event-stream"
-                },
+                headers={"Content-Type": "application/json", "Accept": "text/event-stream"},
                 method="POST"
             )
-
-            # Limpiar y empezar streaming
             self.root.after(0, lambda: self._set_response(""))
-            full_response = ""
+            full = ""
 
-            with urllib.request.urlopen(req, timeout=60) as response:
-                for line in response:
+            with urllib.request.urlopen(req, timeout=60) as resp:
+                for line in resp:
                     line = line.decode("utf-8").strip()
-                    if not line or not line.startswith("data: "):
-                        continue
+                    if not line.startswith("data: "): continue
                     data_str = line[6:]
-                    if data_str == "[DONE]":
-                        break
+                    if data_str == "[DONE]": break
                     try:
-                        data = _json.loads(data_str)
-                        delta = data.get("choices", [{}])[0].get("delta", {})
-                        content = delta.get("content", "")
+                        content = _json.loads(data_str)["choices"][0]["delta"].get("content","")
                         if content:
-                            full_response += content
-                            chunk = content
-                            self.root.after(0, lambda c=chunk: self._append_response(c))
+                            full += content
+                            self.root.after(0, lambda c=content: self._append_response(c))
                     except Exception:
                         continue
 
-            # Actualizar log
             if self.session_log:
-                self.session_log[-1]["response"] = full_response
-
-            self.root.after(0, lambda: self._status("✅ Listo — Enter para nueva pregunta", ACCENT_GRN))
+                self.session_log[-1]["response"] = full
+            self.root.after(0, lambda: self._status("Listo — Enter o Ctrl+L para siguiente", ACCENT_GRN))
 
         except urllib.error.URLError as e:
-            err = f"❌ Error de conexión con LM Studio:\n{e}\n\nVerifica que LM Studio esté corriendo."
-            self.root.after(0, lambda: self._set_response(err))
-            self.root.after(0, lambda: self._status("❌ Error LM Studio", ACCENT_RED))
-            # Reintentar detección de IP
+            self.root.after(0, lambda: self._set_response(f"Error de conexion con LM Studio:\n{e}"))
+            self.root.after(0, lambda: self._status("Error LM Studio", ACCENT_RED))
             self.lm_url = None
             threading.Thread(target=self._find_lm_studio, daemon=True).start()
-
         except Exception as e:
-            err = f"❌ Error inesperado:\n{e}"
-            self.root.after(0, lambda: self._set_response(err))
-            self.root.after(0, lambda: self._status("❌ Error", ACCENT_RED))
-
+            self.root.after(0, lambda: self._set_response(f"Error: {e}"))
+            self.root.after(0, lambda: self._status("Error", ACCENT_RED))
         finally:
             self.is_thinking = False
 
-    # ─── Guardar sesión ──────────────────────────────────────────────────────
+    # ─── Session log ─────────────────────────────────────────────────────────
     def _save_session_log(self):
         if not self.session_log:
             return
         try:
             LOG_PATH.mkdir(parents=True, exist_ok=True)
             ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-            log_file = LOG_PATH / f"session_{ts}.json"
-            log_file.write_text(
+            (LOG_PATH / f"session_{ts}.json").write_text(
                 json.dumps(self.session_log, ensure_ascii=False, indent=2),
                 encoding="utf-8"
             )
@@ -587,59 +790,26 @@ INSTRUCCIONES CRÍTICAS:
 
     # ─── Run ─────────────────────────────────────────────────────────────────
     def run(self):
-        """Inicia el overlay."""
-        # Aplicar capture exclusion después de que la ventana sea visible
-        self.root.after(500, self._reapply_capture_exclusion)
+        self.root.after(600, self._reapply_capture_exclusion)
         self.root.mainloop()
 
-    def _reapply_capture_exclusion(self):
-        """
-        Re-aplica WDA_EXCLUDEFROMCAPTURE después de que la ventana esté
-        completamente inicializada. Este segundo intento es más confiable.
-        """
-        try:
-            # Obtener HWND real de la ventana tkinter
-            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
-            if hwnd == 0:
-                hwnd = self.root.winfo_id()
 
-            # También buscar por título
-            hwnd2 = ctypes.windll.user32.FindWindowW(None, "AI Copilot")
-            target_hwnd = hwnd2 if hwnd2 else hwnd
-
-            WDA_EXCLUDEFROMCAPTURE = 0x00000011
-            result = ctypes.windll.user32.SetWindowDisplayAffinity(target_hwnd, WDA_EXCLUDEFROMCAPTURE)
-
-            if result:
-                self._status("🔒 INVISIBLE en screen share ✓", ACCENT_GRN)
-            else:
-                error = ctypes.get_last_error()
-                self._status(f"⚠️  Capture exclusion: error {error}", ACCENT_YLW)
-        except Exception as e:
-            self._status(f"⚠️  Windows API: {e}", ACCENT_YLW)
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#   ENTRY POINT
-# ══════════════════════════════════════════════════════════════════════════════
+# ═════════════════════════════════════════════════════════════════════════════
 def main():
-    print("=" * 60)
-    print("🎯 AI INTERVIEW COPILOT OVERLAY")
-    print("=" * 60)
-    print(f"📂 Proyecto: {PROJECT_ROOT}")
-    print(f"📄 CV: {'✅ Cargado' if CV_PATH.exists() else '❌ No encontrado'}")
+    print("=" * 55)
+    print("AI INTERVIEW COPILOT OVERLAY")
+    print("=" * 55)
+    print(f"CV: {'Cargado' if CV_PATH.exists() else 'No encontrado'}")
+    print(f"Voz: {'SpeechRecognition + sounddevice OK' if HAS_SR and HAS_SD else 'No disponible — pip install SpeechRecognition sounddevice scipy'}")
     print()
-    print("⚡ HOTKEYS:")
-    print("   Ctrl+Shift+H  → Mostrar / Ocultar")
-    print("   Enter         → Enviar pregunta")
-    print("   Escape        → Limpiar")
-    print("   Ctrl+Q        → Cerrar")
+    print("HOTKEYS:")
+    print("  Ctrl+L (mantener) = Escuchar / soltar = Procesar")
+    print("  Ctrl+Shift+H      = Ocultar/Mostrar")
+    print("  Enter             = Enviar texto")
+    print("  Ctrl+Q            = Cerrar")
     print()
-    print("🔒 La ventana es INVISIBLE en Zoom/Teams/Meet/OBS")
-    print("   (requiere Windows 10 build 19041+)")
-    print()
-    print("Iniciando overlay... (puedes minimizar esta terminal)")
-    print("=" * 60)
+    print("INVISIBLE en Zoom / Teams / Google Meet / OBS")
+    print("=" * 55)
 
     app = InterviewCopilotOverlay()
     app.run()

@@ -74,37 +74,47 @@ def main():
         
         try:
             result = analyzer.analyze_job(job)
-            print(f"   ✅ FIT: {result.get('fit_score', 'N/A')}/10")
-            
-            print(f"   💾 Saving...")
-            
+            fit = result.get('fit_score', 5)
+            rec = result.get('recomendacion', '')
+            print(f"   FIT: {fit}/10  [{rec}]")
+            if result.get('tienes'):
+                print(f"   Tienes: {result['tienes'][:80]}")
+            if result.get('faltan'):
+                print(f"   Faltan: {result['faltan'][:80]}")
+
+            print(f"   Guardando...")
+
             updates = {
-                'FitScore': result.get('fit_score'),
-                'Why': result.get('why', ''),
-                'Seniority': result.get('seniority', '')
+                'FitScore':  fit,
+                'Why':       result.get('why', ''),
+                'Seniority': result.get('seniority', ''),
+                'Tienes':    result.get('tienes', ''),
+                'Faltan':    result.get('faltan', ''),
             }
-            
+
             sheet_manager.update_job(job['_row'], updates, 'linkedin')
             writes_this_minute += 1
-            print(f"   ✅ Saved!")
+
+            # Colorear la fila segun FIT (semaforo)
+            sheet_manager.color_row_by_fit(job['_row'], fit, 'linkedin')
+
+            print(f"   OK — color aplicado")
             processed += 1
-            
-            # Small delay between operations (0.5s)
+
             time.sleep(0.5)
-            
+
         except Exception as e:
-            print(f"   ❌ Error: {e}")
+            print(f"   Error: {e}")
             errors += 1
-    
+
     print("\n" + "="*70)
-    print("📊 SUMMARY")
+    print("SUMMARY")
     print("="*70)
-    print(f"Processed: {processed}")
-    print(f"Errors: {errors}")
+    print(f"Procesados: {processed}")
+    print(f"Errores:    {errors}")
     print("="*70)
-    
-    print("\n✅ FIT scores calculated!")
-    print(f"\nView: https://docs.google.com/spreadsheets/d/{sheet_id}/edit#gid=0")
+    print("\nFIT scores calculados con gap analysis y semaforo de colores.")
+    print(f"\nSheet: https://docs.google.com/spreadsheets/d/{sheet_id}/edit#gid=0")
 
 if __name__ == "__main__":
     main()

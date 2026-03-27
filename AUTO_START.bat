@@ -30,8 +30,17 @@ if %errorlevel% equ 0 (
 ) else (
     echo   LM Studio: Starting...
     start "" "C:\Users\%USERNAME%\AppData\Local\LM Studio\LM Studio.exe"
-    timeout /t 5 /nobreak >nul
+    echo   Waiting for LM Studio API to be ready...
+    timeout /t 15 /nobreak >nul
 )
+
+REM 2b. Force load Qwen3.5-27B Q4_K_M as active model
+echo   Loading Qwen3.5-27B Q4_K_M...
+curl -s -X POST http://127.0.0.1:11434/v1/chat/completions ^
+  -H "Content-Type: application/json" ^
+  -d "{\"model\":\"unsloth/qwen3.5-27b\",\"messages\":[{\"role\":\"user\",\"content\":\"hi\"}],\"max_tokens\":1}" ^
+  >nul 2>&1
+echo   Qwen3.5 load request sent (may take 30-60s to fully load in background)
 
 REM 3. Start Control Center
 echo.

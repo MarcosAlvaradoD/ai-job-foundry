@@ -845,7 +845,12 @@ class JobBulletinProcessor:
                 
                 else:
                     # Procesamiento normal para otros tipos de bulletins
-                    tab_name = bulletin_type.capitalize()
+                    TAB_NAMES = {
+                        'linkedin': 'LinkedIn', 'indeed': 'Indeed',
+                        'glassdoor': 'Glassdoor', 'adzuna': 'Adzuna',
+                        'computrabajo': 'Computrabajo', 'jobleads': 'JobLeads'
+                    }
+                    tab_name = TAB_NAMES.get(bulletin_type, bulletin_type.capitalize())
                     unique_jobs = []
                     duplicates_found = 0
                     

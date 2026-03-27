@@ -365,6 +365,12 @@ const INITIAL_CARDS = [
   { id:'c21', col:'backlog', title:'Análisis de mercado — keywords trending', desc:'Extraer keywords más frecuentes de jobs FIT≥7 para entender qué busca el mercado. Mejorar sección "Resumen" del Sheets.', priority:'p3', cat:'ai', effort:'M' },
   { id:'c22', col:'backlog', title:'Windows Task Scheduler — pipeline automático diario', desc:'Configurar tarea programada para correr run_daily_pipeline.py --quick cada día a las 7am. Scripts PowerShell ya existen en scripts/powershell/', priority:'p3', cat:'infra', effort:'S' },
 
+  // ── EN PROGRESO / RECIEN IMPLEMENTADO ────────────────────
+  { id:'e1', col:'doing', title:'Overlay: voz push-to-talk (Ctrl+L)', desc:'Mantener Ctrl+L para grabar, soltar para transcribir y enviar al AI. Sin sonido de salida — solo texto en pantalla. Usa SpeechRecognition + sounddevice + Google Speech. IMPLEMENTADO en overlay v2.', priority:'p0', cat:'copilot', effort:'M' },
+  { id:'e2', col:'doing', title:'Overlay: cargar job/perfil desde Sheets', desc:'Boton "Sheets" en el overlay — carga top 12 jobs FIT>=7, popup de seleccion, inyecta empresa+rol en system prompt. IMPLEMENTADO en overlay v2.', priority:'p0', cat:'copilot', effort:'S' },
+  { id:'e3', col:'todo',  title:'Telegram: procesar notas de voz', desc:'Bot recibe voice notes (.ogg) pero no las procesa. Necesita: descargar de API Telegram, convertir a wav (pydub/ffmpeg), transcribir con Whisper o Google SR, procesar como texto normal en el pipeline.', priority:'p1', cat:'ai', effort:'M' },
+  { id:'e4', col:'todo',  title:'Telegram: procesar imágenes', desc:'Recibir screenshots de ofertas en Telegram, describir con modelo vision (LM Studio o Gemini), procesar descripcion como job lead. Util para capturas de WhatsApp, LinkedIn mobile, etc.', priority:'p1', cat:'ai', effort:'M' },
+
   // ── DONE ──────────────────────────────────────────────────
   { id:'d1', col:'done', title:'LinkedIn scraper (Gmail bulletins)', desc:'Procesamiento de boletines de LinkedIn vía Gmail API. 100% funcional.', priority:'p0', cat:'scraping', effort:'L' },
   { id:'d2', col:'done', title:'AI Analysis — FIT scores (LM Studio)', desc:'390/393 jobs tienen FIT score calculado con Qwen2.5 14B. Penalizaciones de salario aplicadas.', priority:'p0', cat:'ai', effort:'L' },

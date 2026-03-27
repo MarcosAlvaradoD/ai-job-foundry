@@ -38,15 +38,75 @@ class SheetManager:
         
         # Nombres de pestañas
         self.tabs = {
-            "registry": "Registry",
-            "linkedin": "LinkedIn",
-            "indeed": "Indeed",
-            "glassdoor": "Glassdoor",
-            "resumen": "Resumen"
+            "registry":     "Registry",
+            "linkedin":     "LinkedIn",
+            "indeed":       "Indeed",
+            "glassdoor":    "Glassdoor",
+            "adzuna":       "Adzuna",
+            "computrabajo": "Computrabajo",
+            "jobleads":     "JobLeads",
+            "resumen":      "Resumen",
         }
 
         # Cache de headers por pestaña — evita leer A1:Z1 en cada operación
         self._headers_cache: Dict[str, List[str]] = {}
+        # Cache de sheet IDs numéricos para batchUpdate (colores)
+        self._sheet_id_cache: Dict[str, int] = {}
+
+    def _get_sheet_id(self, tab_name: str) -> int:
+        """Obtiene el sheetId numérico de una pestaña (necesario para batchUpdate de formato)."""
+        if tab_name not in self._sheet_id_cache:
+            spreadsheet = self.service.spreadsheets().get(
+                spreadsheetId=self.spreadsheet_id
+            ).execute()
+            for sheet in spreadsheet.get('sheets', []):
+                title = sheet['properties']['title']
+                self._sheet_id_cache[title] = sheet['properties']['sheetId']
+        return self._sheet_id_cache[tab_name]
+
+    def color_row_by_fit(self, row_num: int, fit_score: int, tab: str = "linkedin") -> bool:
+        """
+        Colorea una fila completa en el sheet con semaforo segun FIT score.
+        Verde (8-10), Amarillo (6-7), Naranja (4-5), Rojo (0-3).
+        """
+        try:
+            tab_name = self.tabs.get(tab, tab)
+            sheet_id = self._get_sheet_id(tab_name)
+
+            if fit_score >= 8:
+                color = {"red": 0.714, "green": 0.843, "blue": 0.659}   # verde
+            elif fit_score >= 6:
+                color = {"red": 1.0,   "green": 0.898, "blue": 0.600}   # amarillo
+            elif fit_score >= 4:
+                color = {"red": 0.980, "green": 0.737, "blue": 0.016}   # naranja
+            else:
+                color = {"red": 0.918, "green": 0.600, "blue": 0.600}   # rojo
+
+            requests_body = [{
+                "repeatCell": {
+                    "range": {
+                        "sheetId": sheet_id,
+                        "startRowIndex": row_num - 1,
+                        "endRowIndex": row_num,
+                        "startColumnIndex": 0,
+                        "endColumnIndex": 26
+                    },
+                    "cell": {
+                        "userEnteredFormat": {
+                            "backgroundColor": color
+                        }
+                    },
+                    "fields": "userEnteredFormat.backgroundColor"
+                }
+            }]
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body={"requests": requests_body}
+            ).execute()
+            return True
+        except Exception as e:
+            print(f"  Warning: no se pudo colorear fila {row_num}: {e}")
+            return False
 
     def _get_headers(self, tab_name: str) -> List[str]:
         """Obtiene los headers de una pestaña, usando cache para evitar HTTP 429."""
@@ -218,6 +278,22 @@ class SheetManager:
         
         return True
     
+    def update_cell(self, tab: str, row_id: int, column: str, value: str) -> bool:
+        """
+        Actualiza una sola celda por nombre de columna.
+        Wrapper conveniente sobre update_job.
+
+        Args:
+            tab     : clave del dict self.tabs  (ej: "linkedin")
+            row_id  : número de fila 1-based    (2 = primera oferta)
+            column  : nombre de la columna      (ej: "GeoOK")
+            value   : valor a escribir
+
+        Returns:
+            True si exitoso
+        """
+        return self.update_job(row_id, {column: value}, tab)
+
     def batch_update_jobs(self, updates: List[Dict]) -> bool:
         """
         Actualiza múltiples ofertas en una sola request (más eficiente)
