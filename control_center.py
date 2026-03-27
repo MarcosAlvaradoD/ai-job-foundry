@@ -123,14 +123,19 @@ def print_menu():
     print("  13. 📊 Abrir Dashboard")
     print("  14. 📄 Ver Google Sheets")
     
+    print(f"\n{COLORS['BOLD']}INTERVIEW COPILOT:{COLORS['END']}")
+    print(f"  17. 🔒 Copilot OVERLAY (invisible en Zoom/Teams/Meet) ⭐ NUEVO")
+    print("  18. 🎤 Copilot Simple / V2 con Job Context")
+
     print(f"\n{COLORS['BOLD']}UTILIDADES:{COLORS['END']}")
-    print("  15. 🔧 Ver Configuración (.env)")
-    print("  16. 📚 Ver Documentación")
-    print("  17. 🎤 Interview Copilot (prep entrevistas)")
-    print("  18. 📩 Actualizar Status desde Emails (entrevistas, rechazos)")
-    print("  19. 🚫 Marcar Jobs Expirados (auto-detect)")
-    print("  20. 🔐 Regenerar Credenciales OAuth (Gmail/Sheets)")
-    
+    print("  19. 📩 Actualizar Status desde Emails (entrevistas, rechazos)")
+    print("  20. 🚫 Marcar Jobs Expirados (auto-detect)")
+    print("  21. 🔐 Regenerar Credenciales OAuth (Gmail/Sheets)")
+    print("  22. 🔍 Diagnóstico del Pipeline (estado real del sheet)")
+    print("  23. 📋 Backlog Kanban (pizarrón de tareas pendientes)")
+    print("  24. 🔧 Ver Configuración (.env)")
+    print("  25. 📚 Ver Documentación")
+
     print(f"\n{COLORS['RED']}SALIR:{COLORS['END']}")
     print("  0. 🚪 Salir")
     
@@ -409,48 +414,67 @@ def handle_option(option: str):
         return True
     
     elif option == '17':
-        # Interview Copilot
-        print(f"\n{COLORS['CYAN']}🎤 Interview Copilot{COLORS['END']}")
+        # Interview Copilot OVERLAY — invisible en screen share
+        print(f"\n{COLORS['CYAN']}🔒 INTERVIEW COPILOT OVERLAY{COLORS['END']}")
+        print(f"{COLORS['GREEN']}✅ INVISIBLE en Zoom / Teams / Google Meet / OBS{COLORS['END']}")
+        print(f"   Usa WDA_EXCLUDEFROMCAPTURE (Windows API)")
+        print(f"\n{COLORS['YELLOW']}Instrucciones:{COLORS['END']}")
+        print(f"   1. Abre tu videollamada normalmente")
+        print(f"   2. El overlay aparece en la esquina — solo TÚ lo ves")
+        print(f"   3. Escribe la pregunta del entrevistador → Enter")
+        print(f"   4. LM Studio responde con sugerencia basada en tu CV")
+        print(f"   5. Ctrl+Shift+H para ocultar/mostrar rápido")
+        print(f"\n{COLORS['CYAN']}Requiere: LM Studio corriendo con Qwen2.5 14B{COLORS['END']}")
+        input(f"\n{COLORS['BOLD']}Presiona Enter para lanzar el overlay...{COLORS['END']}")
+        return run_command(
+            ['py', 'core/copilot/interview_copilot_overlay.py'],
+            'Interview Copilot OVERLAY (invisible en screen share)'
+        )
+
+    elif option == '18':
+        # Interview Copilot clásico
+        print(f"\n{COLORS['CYAN']}🎤 Interview Copilot (modo clásico){COLORS['END']}")
         print("\nOpciones:")
-        print("  1. Session Recorder (grabar + transcribir)")
-        print("  2. Simple Mode (sin grabar)")
-        print("  3. V2 con Job Context")
-        
+        print("  1. Simple Mode (texto, sin grabar)")
+        print("  2. V2 con Job Context (carga job del Sheet)")
+        print("  3. Session Recorder (push-to-talk + Whisper)")
+
         copilot_option = input(f"\n{COLORS['BOLD']}Selecciona [1/2/3]: {COLORS['END']}").strip()
-        
+
         if copilot_option == '1':
-            return run_command(
-                ['py', 'core/copilot/interview_copilot_session_recorder.py'],
-                'Interview Copilot - Session Recorder'
-            )
-        elif copilot_option == '2':
             return run_command(
                 ['py', 'core/copilot/interview_copilot_simple.py'],
                 'Interview Copilot - Simple Mode'
             )
-        elif copilot_option == '3':
+        elif copilot_option == '2':
             return run_command(
                 ['py', 'core/copilot/interview_copilot_v2.py'],
                 'Interview Copilot V2 - Job Context'
             )
+        elif copilot_option == '3':
+            return run_command(
+                ['py', 'core/copilot/interview_copilot_session_recorder.py'],
+                'Interview Copilot - Session Recorder'
+            )
         else:
             print(f"{COLORS['RED']}❌ Opción inválida{COLORS['END']}")
             return False
-    elif option == '18':
+
+    elif option == '19':
         # Actualizar status desde emails
         return run_command(
             ['py', 'update_status_from_emails.py'],
             'Actualizando status desde emails (entrevistas, rechazos)'
         )
-    
-    elif option == '19':
+
+    elif option == '20':
         # Marcar jobs expirados
         return run_command(
             ['py', 'scripts/verifiers/EXPIRE_LIFECYCLE.py', '--mark'],
             'Marcando jobs expirados (>30 días)'
         )
-    
-    elif option == '20':
+
+    elif option == '21':
         # Regenerar credenciales OAuth
         print(f"\n{COLORS['YELLOW']}🔐 REGENERAR CREDENCIALES OAUTH{COLORS['END']}")
         print(f"\n{COLORS['CYAN']}Permisos que se solicitarán:{COLORS['END']}")
@@ -458,10 +482,10 @@ def handle_option(option: str):
         print(f"  • Gmail - Lectura de emails")
         print(f"  • Gmail - Modificar etiquetas")
         print(f"  • Gmail - Mover a papelera")
-        print(f"\n{COLORS['YELLOW']}NOTA: Esto eliminará tu token.json actual y te pedirá login de nuevo{COLORS['END']}")
-        
-        confirm = input(f"\n{COLORS['BOLD']}¿Regenerar credenciales? (escribe 'SI' o 'S'): {COLORS['END']}").strip().upper()
-        
+        print(f"\n{COLORS['YELLOW']}NOTA: Elimina token.json y pide login de nuevo{COLORS['END']}")
+
+        confirm = input(f"\n{COLORS['BOLD']}¿Regenerar credenciales? (SI/S): {COLORS['END']}").strip().upper()
+
         if confirm in ['SI', 'S', 'YES', 'Y']:
             return run_command(
                 ['py', 'scripts/oauth/regenerate_oauth_token.py'],
@@ -470,6 +494,52 @@ def handle_option(option: str):
         else:
             print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
             return False
+
+    elif option == '22':
+        # Diagnóstico del pipeline
+        return run_command(
+            ['py', 'scripts/diagnostics/diagnose_pipeline.py'],
+            'Diagnóstico completo del pipeline (Sheet + ApplyURL + elegibles)'
+        )
+
+    elif option == '23':
+        # Backlog Kanban
+        backlog_path = str(Path(__file__).parent / 'boards' / 'backlog.html')
+        if Path(backlog_path).exists():
+            print(f"\n{COLORS['GREEN']}✅ Abriendo Backlog Kanban en el navegador...{COLORS['END']}")
+            webbrowser.open(f'file:///{backlog_path}')
+        else:
+            print(f"{COLORS['RED']}❌ No se encontró boards/backlog.html{COLORS['END']}")
+        return True
+
+    elif option == '24':
+        # Ver .env
+        show_file('.env', 'Configuración (.env)')
+        return True
+
+    elif option == '25':
+        # Ver Documentación
+        print(f"\n{COLORS['CYAN']}Documentación disponible:{COLORS['END']}")
+        print("  1. docs/PROJECT_STATUS.md - Estado del proyecto")
+        print("  2. docs/MASTER_FEATURE_ROADMAP.md - Roadmap de features")
+        print("  3. docs/AUTO_APPLY_AI_LOCAL_GUIDE.md - Guía auto-apply")
+        print("  4. docs/LINKEDIN_AUTO_APPLY_V3.md - LinkedIn V3")
+        print("  5. README.md - Documentación general")
+
+        doc_choice = input(f"\n{COLORS['BOLD']}¿Cuál ver? [1-5 o Enter para omitir]: {COLORS['END']}").strip()
+
+        docs = {
+            '1': 'docs/PROJECT_STATUS.md',
+            '2': 'docs/MASTER_FEATURE_ROADMAP.md',
+            '3': 'docs/AUTO_APPLY_AI_LOCAL_GUIDE.md',
+            '4': 'docs/LINKEDIN_AUTO_APPLY_V3.md',
+            '5': 'README.md'
+        }
+
+        if doc_choice in docs:
+            show_file(docs[doc_choice], f'Documentación - {docs[doc_choice]}')
+
+        return True
     
     elif option == '0':
         # Salir

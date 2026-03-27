@@ -311,8 +311,9 @@ class InterviewCopilotOverlay:
         send_btn.pack(side="left", padx=(4, 0))
 
         # ── Job context input ────────────────────────────────────────────────
-        job_input_frame = tk.Frame(self.root, bg=BG_DARK, padx=6, pady=(0, 6))
-        job_input_frame.pack(fill="x")
+        # FIX: pady tuple no es válido en Frame constructor — moverlo a pack()
+        job_input_frame = tk.Frame(self.root, bg=BG_DARK, padx=6)
+        job_input_frame.pack(fill="x", pady=(0, 6))
 
         self.job_input_var = tk.StringVar()
         job_entry = tk.Entry(
