@@ -108,8 +108,32 @@
     .card.drag-over { border-color: var(--green); border-style: dashed; }
 
     .card-title { font-weight: 600; font-size: 13px; margin-bottom: 4px; line-height: 1.4; }
-    .card-desc  { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; }
+    .card-desc  { font-size: 11px; color: var(--muted); margin-bottom: 8px; line-height: 1.4; position: relative; cursor: default; }
     .card-footer { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+
+    /* ── Tooltip descripción completa ── */
+    .card-desc[data-full]::after {
+      content: attr(data-full);
+      display: none;
+      position: fixed;
+      left: 50%;
+      transform: translateX(-50%);
+      bottom: 24px;
+      width: min(520px, 90vw);
+      background: #1c2128;
+      border: 1px solid var(--blue);
+      border-radius: 8px;
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--text);
+      line-height: 1.6;
+      z-index: 9999;
+      white-space: pre-wrap;
+      word-break: break-word;
+      box-shadow: 0 8px 32px #0008;
+      pointer-events: none;
+    }
+    .card-desc[data-full]:hover::after { display: block; }
 
     /* ── Tags / Badges ── */
     .tag {
@@ -341,7 +365,7 @@ const INITIAL_CARDS = [
   { id:'c3', col:'todo', title:'Completar Interview Copilot — loop de sesión', desc:'interview_copilot_v2.py tiene TODO pendiente: implementar el loop completo de sesión con el nuevo system prompt + job context. El overlay ya está hecho, falta el flujo interactivo.', priority:'p0', cat:'copilot', effort:'M' },
 
   // ── ALTA PRIORIDAD ────────────────────────────────────────
-  { id:'c4', col:'todo', title:'Copilot: captura de audio con Whisper', desc:'Implementar push-to-talk (Ctrl+Shift+R) en el overlay. Requiere: pip install openai-whisper pyaudio numpy. El modelo "base" de Whisper pesa ~1.4GB.', priority:'p1', cat:'copilot', effort:'M' },
+  { id:'c4', col:'done', title:'Copilot: captura de audio con Whisper', desc:'Whisper local (openai-whisper) integrado en interview_copilot_overlay.py. Prioridad: Whisper GPU → Google SR fallback. Hotkeys: Ctrl+L (mantener) + Ctrl+Shift+R (toggle). Modelo configurable via WHISPER_MODEL env var (default: base ~145MB).', priority:'p1', cat:'copilot', effort:'M' },
   { id:'c5', col:'todo', title:'Dashboard Resumen — fix keywords erróneos', desc:'La pestaña "Resumen" en Sheets muestra keywords de error LM Studio (llm, conexi, httpconnection). Filtrar solo keywords de job descriptions reales.', priority:'p1', cat:'sheets', effort:'XS' },
   { id:'c6', col:'todo', title:'Procesar emails pendientes en Gmail (JOBS/Inbound)', desc:'Hay 50+ emails sin procesar en la carpeta JOBS/Inbound. Correr job_bulletin_processor.py y verificar nuevos jobs ingresados.', priority:'p1', cat:'scraping', effort:'XS' },
   { id:'c7', col:'todo', title:'Completar FIT scores — jobs sin puntaje', desc:'Aún hay jobs sin FIT score en algunas pestañas. Correr: py scripts/maintenance/calculate_all_fit_scores_v2.py', priority:'p1', cat:'ai', effort:'XS' },
@@ -366,8 +390,8 @@ const INITIAL_CARDS = [
   { id:'c22', col:'backlog', title:'Windows Task Scheduler — pipeline automático diario', desc:'Configurar tarea programada para correr run_daily_pipeline.py --quick cada día a las 7am. Scripts PowerShell ya existen en scripts/powershell/', priority:'p3', cat:'infra', effort:'S' },
 
   // ── EN PROGRESO / RECIEN IMPLEMENTADO ────────────────────
-  { id:'e1', col:'doing', title:'Overlay: voz push-to-talk (Ctrl+L)', desc:'Mantener Ctrl+L para grabar, soltar para transcribir y enviar al AI. Sin sonido de salida — solo texto en pantalla. Usa SpeechRecognition + sounddevice + Google Speech. IMPLEMENTADO en overlay v2.', priority:'p0', cat:'copilot', effort:'M' },
-  { id:'e2', col:'doing', title:'Overlay: cargar job/perfil desde Sheets', desc:'Boton "Sheets" en el overlay — carga top 12 jobs FIT>=7, popup de seleccion, inyecta empresa+rol en system prompt. IMPLEMENTADO en overlay v2.', priority:'p0', cat:'copilot', effort:'S' },
+  { id:'e1', col:'done', title:'Overlay: voz push-to-talk (Ctrl+L)', desc:'Mantener Ctrl+L para grabar, soltar para transcribir y enviar al AI. Sin sonido de salida — solo texto en pantalla. Usa SpeechRecognition + sounddevice + Google Speech. IMPLEMENTADO en overlay v2.', priority:'p0', cat:'copilot', effort:'M' },
+  { id:'e2', col:'done', title:'Overlay: cargar job/perfil desde Sheets', desc:'Boton "Sheets" en el overlay — carga top 12 jobs FIT>=7, popup de seleccion, inyecta empresa+rol en system prompt. IMPLEMENTADO en overlay v2.', priority:'p0', cat:'copilot', effort:'S' },
   { id:'e3', col:'todo',  title:'Telegram: procesar notas de voz', desc:'Bot recibe voice notes (.ogg) pero no las procesa. Necesita: descargar de API Telegram, convertir a wav (pydub/ffmpeg), transcribir con Whisper o Google SR, procesar como texto normal en el pipeline.', priority:'p1', cat:'ai', effort:'M' },
   { id:'e4', col:'todo',  title:'Telegram: procesar imágenes', desc:'Recibir screenshots de ofertas en Telegram, describir con modelo vision (LM Studio o Gemini), procesar descripcion como job lead. Util para capturas de WhatsApp, LinkedIn mobile, etc.', priority:'p1', cat:'ai', effort:'M' },
 
@@ -440,7 +464,7 @@ function createCardEl(c) {
   div.dataset.id = c.id;
   div.innerHTML = `
     <div class="card-title">${escHtml(c.title)}</div>
-    ${c.desc ? `<div class="card-desc">${escHtml(c.desc.slice(0,120))}${c.desc.length>120?'…':''}</div>` : ''}
+    ${c.desc ? `<div class="card-desc" ${c.desc.length>60?`data-full="${escHtml(c.desc)}"`:''} title="">${escHtml(c.desc.slice(0,120))}${c.desc.length>120?'…':''}</div>` : ''}
     <div class="card-footer">
       <span class="tag tag-${c.priority}">${PRIORITY_LABELS[c.priority]}</span>
       <span class="tag tag-${c.cat}">${CAT_LABELS[c.cat]||c.cat}</span>

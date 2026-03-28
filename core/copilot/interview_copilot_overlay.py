@@ -74,6 +74,36 @@ try:
 except ImportError:
     HAS_SD = False
 
+# Whisper local (openai-whisper) — prioridad sobre Google SR
+# Modelos disponibles: tiny(~75MB) base(~145MB) small(~465MB) medium(~1.5GB) large(~3GB)
+# Con RTX 4090 usa GPU automaticamente (10x mas rapido que CPU)
+WHISPER_MODEL_SIZE = os.getenv("WHISPER_MODEL", "base")   # configurable via .env
+_whisper_model = None   # cargado lazy al primer uso
+
+def _load_whisper():
+    """Carga el modelo Whisper la primera vez que se necesita (lazy load)."""
+    global _whisper_model
+    if _whisper_model is not None:
+        return _whisper_model
+    try:
+        import whisper
+        print(f"[Whisper] Cargando modelo '{WHISPER_MODEL_SIZE}'... (puede tomar 5-10s la primera vez)")
+        _whisper_model = whisper.load_model(WHISPER_MODEL_SIZE)
+        print(f"[Whisper] ✓ Modelo '{WHISPER_MODEL_SIZE}' listo")
+        return _whisper_model
+    except ImportError:
+        return None
+    except Exception as e:
+        print(f"[Whisper] Error cargando modelo: {e}")
+        return None
+
+try:
+    import whisper as _whisper_test
+    HAS_WHISPER = True
+    del _whisper_test
+except ImportError:
+    HAS_WHISPER = False
+
 # ─── Colores ─────────────────────────────────────────────────────────────────
 BG_DARK     = "#0d1117"
 BG_CARD     = "#161b22"
@@ -282,28 +312,28 @@ class InterviewCopilotOverlay:
         # Boton de VOZ (mantener presionado)
         voice_state = {"active": False}
 
+        # Label del motor de voz activo
+        engine_label = "🤖 Whisper local" if HAS_WHISPER else ("🌐 Google SR" if HAS_SR else "❌ Sin voz")
+        btn_text = f"MANTENER = ESCUCHAR  (Ctrl+L / Ctrl+Shift+R toggle)\n{engine_label} · modelo {WHISPER_MODEL_SIZE}" if HAS_WHISPER or HAS_SR \
+                   else "Voz no disponible — pip install openai-whisper sounddevice scipy"
+
         self.voice_btn = tk.Button(
             voice_frame,
-            text="MANTENER = ESCUCHAR  (Ctrl+L)",
-            bg=BG_INPUT, fg=FG_MUTED,
+            text=btn_text,
+            bg=BG_INPUT if (HAS_WHISPER or HAS_SR) else ACCENT_RED,
+            fg=FG_MUTED if (HAS_WHISPER or HAS_SR) else "#fff",
             font=("Segoe UI", 8, "bold"),
             relief="flat", bd=0,
             padx=8, pady=5,
             cursor="hand2",
+            justify="center",
             activebackground=ACCENT_VOICE, activeforeground="#000"
         )
         self.voice_btn.pack(fill="x")
 
-        # Bind press/release del boton
+        # Bind press/release del boton (mantener = push-to-talk)
         self.voice_btn.bind("<ButtonPress-1>",   lambda e: self._start_listening())
         self.voice_btn.bind("<ButtonRelease-1>", lambda e: self._stop_listening())
-
-        # Instruccion si no hay librerias
-        if not HAS_SR:
-            self.voice_btn.config(
-                text="Voz no disponible — pip install SpeechRecognition sounddevice scipy",
-                fg=ACCENT_RED
-            )
 
         # ── Input de texto ───────────────────────────────────────────────────
         inp_frame = tk.Frame(self.root, bg=BG_DARK, padx=6, pady=2)
@@ -352,9 +382,10 @@ class InterviewCopilotOverlay:
                   self._load_job_from_sheets_async, ACCENT_BLUE, BG_DARK, 5).pack(side="left", padx=(2,0))
 
         # ── Hint ─────────────────────────────────────────────────────────────
+        whisper_hint = f"Whisper:{WHISPER_MODEL_SIZE}(GPU)" if HAS_WHISPER else ("GoogleSR" if HAS_SR else "SinVoz")
         tk.Label(
             self.root,
-            text="Ctrl+L=Escuchar  Ctrl+Shift+H=Ocultar  Invisible en Zoom/Teams",
+            text=f"Ctrl+L=Mantener  Ctrl+Shift+R=Toggle  Ctrl+Shift+H=Ocultar  [{whisper_hint}]  Invisible en Zoom/Teams",
             bg=BG_DARK, fg=BORDER, font=("Segoe UI", 6)
         ).pack(pady=(0, 3))
 
@@ -362,14 +393,25 @@ class InterviewCopilotOverlay:
     def _setup_hotkeys(self):
         try:
             import keyboard
-            keyboard.add_hotkey("ctrl+l",         self._hotkey_voice_start, suppress=False)
-            keyboard.on_release_key("l",          self._hotkey_voice_stop)
-            keyboard.add_hotkey("ctrl+shift+h",   self._toggle_visibility,  suppress=False)
-            keyboard.add_hotkey("ctrl+q",         self._quit,               suppress=False)
+            # Ctrl+L (original) — mantener presionado
+            keyboard.add_hotkey("ctrl+l",           self._hotkey_voice_start, suppress=False)
+            keyboard.on_release_key("l",            self._hotkey_voice_stop)
+            # Ctrl+Shift+R (nuevo) — toggle push-to-talk
+            keyboard.add_hotkey("ctrl+shift+r",     self._hotkey_voice_toggle, suppress=False)
+            keyboard.add_hotkey("ctrl+shift+h",     self._toggle_visibility,  suppress=False)
+            keyboard.add_hotkey("ctrl+q",           self._quit,               suppress=False)
         except ImportError:
-            self.root.bind("<Control-l>", lambda e: self._toggle_listening())
-            self.root.bind("<Control-h>", lambda e: self._toggle_visibility())
-            self.root.bind("<Control-q>", lambda e: self._quit())
+            self.root.bind("<Control-l>",       lambda e: self._toggle_listening())
+            self.root.bind("<Control-R>",       lambda e: self._toggle_listening())
+            self.root.bind("<Control-h>",       lambda e: self._toggle_visibility())
+            self.root.bind("<Control-q>",       lambda e: self._quit())
+
+    def _hotkey_voice_toggle(self):
+        """Ctrl+Shift+R — toggle: inicia o detiene la grabación."""
+        if self.is_listening:
+            self.root.after(0, self._stop_listening)
+        else:
+            self.root.after(0, self._start_listening)
 
     def _hotkey_voice_start(self):
         if not self.is_listening:
@@ -388,9 +430,16 @@ class InterviewCopilotOverlay:
 
     # ─── VOZ: Grabar con sounddevice (mas confiable en Windows) ──────────────
     def _start_listening(self):
-        if self.is_listening or not HAS_SR or not HAS_SD:
-            if not HAS_SR or not HAS_SD:
-                self._status("Instala: pip install SpeechRecognition sounddevice scipy", ACCENT_RED)
+        # Para grabar audio necesitamos sounddevice (HAS_SD).
+        # Para transcribir: Whisper O SpeechRecognition (cualquiera sirve).
+        can_transcribe = HAS_WHISPER or HAS_SR
+        if self.is_listening:
+            return
+        if not HAS_SD:
+            self._status("Instala sounddevice: pip install sounddevice scipy", ACCENT_RED)
+            return
+        if not can_transcribe:
+            self._status("Instala Whisper: pip install openai-whisper", ACCENT_RED)
             return
         self.is_listening = True
         self._audio_frames = []
@@ -435,55 +484,88 @@ class InterviewCopilotOverlay:
         threading.Thread(target=self._transcribe_and_ask, daemon=True).start()
 
     def _transcribe_and_ask(self):
-        """Transcribe el audio grabado y lo envia al AI."""
-        import io, wave, tempfile
+        """
+        Transcribe el audio grabado y lo envía al AI.
+        Prioridad: Whisper local (GPU) → Google Web Speech → error
+        """
+        import tempfile
         if not self._audio_frames:
             self.root.after(0, lambda: self._status("Sin audio grabado", ACCENT_YLW))
             return
 
         SAMPLE_RATE = 16000
+        tmp_path = None
         try:
-            # Guardar frames en archivo WAV temporal
+            # ── Guardar audio WAV temporal ──────────────────────────────
             frames_np = np.concatenate(self._audio_frames, axis=0)
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
                 tmp_path = tmp.name
             wavfile.write(tmp_path, SAMPLE_RATE, frames_np)
 
-            # Transcribir con SpeechRecognition
-            with sr.AudioFile(tmp_path) as source:
-                audio_data = self.recognizer.record(source)
+            text = None
 
-            # Intentar Google Web Speech (requiere internet, gratuito)
-            try:
-                text = self.recognizer.recognize_google(audio_data, language="es-MX")
-            except sr.UnknownValueError:
-                # Fallback: intentar en ingles
+            # ── OPCION 1: Whisper local (sin internet, GPU, offline) ────
+            if HAS_WHISPER:
+                self.root.after(0, lambda: self._status("Transcribiendo con Whisper (local)...", ACCENT_BLUE))
                 try:
-                    text = self.recognizer.recognize_google(audio_data, language="en-US")
+                    model = _load_whisper()
+                    if model:
+                        # fp16=True aprovecha la RTX 4090 (o cualquier CUDA GPU)
+                        result = model.transcribe(
+                            tmp_path,
+                            language=None,       # auto-detecta español/inglés
+                            fp16=True,           # GPU half-precision (más rápido)
+                            condition_on_previous_text=False,
+                        )
+                        text = result.get("text", "").strip()
+                        detected_lang = result.get("language", "?")
+                        if text:
+                            self.root.after(0, lambda: self._status(
+                                f"Whisper [{detected_lang}]: {text[:50]}", ACCENT_GRN))
+                except Exception as e:
+                    self.root.after(0, lambda: self._status(
+                        f"Whisper error — usando Google SR: {e}", ACCENT_YLW))
+
+            # ── OPCION 2: Google Web Speech (requiere internet) ─────────
+            if not text and HAS_SR and self.recognizer:
+                self.root.after(0, lambda: self._status("Transcribiendo con Google SR...", ACCENT_BLUE))
+                try:
+                    with sr.AudioFile(tmp_path) as source:
+                        audio_data = self.recognizer.record(source)
+                    try:
+                        text = self.recognizer.recognize_google(audio_data, language="es-MX")
+                    except sr.UnknownValueError:
+                        text = self.recognizer.recognize_google(audio_data, language="en-US")
                 except sr.UnknownValueError:
-                    self.root.after(0, lambda: self._status("No se entendio el audio — intenta de nuevo", ACCENT_YLW))
+                    self.root.after(0, lambda: self._status(
+                        "Audio no reconocido — habla más claro o escribe", ACCENT_YLW))
                     return
-            except sr.RequestError:
-                self.root.after(0, lambda: self._status("Sin conexion para transcribir — escribe la pregunta", ACCENT_YLW))
-                return
-            finally:
-                try:
-                    os.unlink(tmp_path)
-                except Exception:
-                    pass
+                except sr.RequestError:
+                    self.root.after(0, lambda: self._status(
+                        "Sin internet para Google SR — instala Whisper: pip install openai-whisper", ACCENT_YLW))
+                    return
 
-            if text:
-                # Mostrar transcripcion en el input
-                self.root.after(0, lambda t=text: (
-                    self.input_var.set(t),
-                    self.input_entry.config(fg=FG_TEXT)
-                ))
-                self.root.after(0, lambda: self._status(f"Transcripcion: {text[:50]}", ACCENT_GRN))
-                # Enviar al AI
-                self.root.after(200, lambda t=text: self._ask(t))
+            if not text:
+                if not HAS_WHISPER and not HAS_SR:
+                    self.root.after(0, lambda: self._status(
+                        "Instala Whisper: pip install openai-whisper sounddevice scipy", ACCENT_RED))
+                else:
+                    self.root.after(0, lambda: self._status("No se detectó voz — intenta de nuevo", ACCENT_YLW))
+                return
+
+            # ── Mostrar transcripción y enviar al AI ───────────────────
+            self.root.after(0, lambda t=text: (
+                self.input_var.set(t),
+                self.input_entry.config(fg=FG_TEXT)
+            ))
+            self.root.after(200, lambda t=text: self._ask(t))
 
         except Exception as e:
             self.root.after(0, lambda: self._status(f"Error transcripcion: {e}", ACCENT_RED))
+        finally:
+            if tmp_path:
+                try: os.unlink(tmp_path)
+                except Exception: pass
 
     def _reset_voice_ui(self):
         self.voice_btn.config(bg=BG_INPUT, fg=FG_MUTED,
@@ -800,7 +882,14 @@ def main():
     print("AI INTERVIEW COPILOT OVERLAY")
     print("=" * 55)
     print(f"CV: {'Cargado' if CV_PATH.exists() else 'No encontrado'}")
-    print(f"Voz: {'SpeechRecognition + sounddevice OK' if HAS_SR and HAS_SD else 'No disponible — pip install SpeechRecognition sounddevice scipy'}")
+    if HAS_WHISPER and HAS_SD:
+        print(f"Voz: ✅ Whisper local ({WHISPER_MODEL_SIZE}) + sounddevice — LISTO (sin internet)")
+    elif HAS_SR and HAS_SD:
+        print(f"Voz: ✅ SpeechRecognition + sounddevice — LISTO (requiere internet)")
+    elif HAS_WHISPER and not HAS_SD:
+        print(f"Voz: ⚠️  Whisper OK pero falta sounddevice → pip install sounddevice scipy")
+    else:
+        print(f"Voz: ❌ No disponible → pip install sounddevice scipy")
     print()
     print("HOTKEYS:")
     print("  Ctrl+L (mantener) = Escuchar / soltar = Procesar")
