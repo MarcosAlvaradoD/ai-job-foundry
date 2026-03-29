@@ -223,38 +223,70 @@ class GmailStatusUpdater:
     
     def update_job_status_by_company(self, company: str, new_status: str) -> bool:
         """
-        Update job status in Google Sheets by company name
-        
-        Args:
-            company: Company name to match
-            new_status: New status to set
-            
-        Returns:
-            True if updated successfully
+        Update job status in Google Sheets by company name (searches all tabs).
         """
+        ALL_TABS = ["linkedin", "glassdoor", "indeed", "computrabajo"]
         try:
-            # Get all jobs
-            all_jobs = self.sheets.get_all_jobs(tab='registry')
-            
-            # Find matching company
-            for job in all_jobs:
-                job_company = job.get('Company', '').lower()
-                if company.lower() in job_company or job_company in company.lower():
-                    row_num = job.get('_row')
-                    if row_num:
-                        self.sheets.update_job(
-                            row_id=row_num,
-                            updates={'Status': new_status},
-                            tab='registry'
-                        )
-                        return True
-            
+            for tab in ALL_TABS:
+                try:
+                    jobs = self.sheets.get_all_jobs(tab=tab)
+                except Exception:
+                    continue
+
+                for job in jobs:
+                    job_company = job.get('Company', '').lower().strip()
+                    if not job_company:
+                        continue
+                    if company.lower() in job_company or job_company in company.lower():
+                        row_num = job.get('_row')
+                        if row_num:
+                            self.sheets.update_job(
+                                row_id=row_num,
+                                updates={'Status': new_status},
+                                tab=tab
+                            )
+                            return True
+
             return False
-            
+
         except Exception as e:
             print(f"⚠️  Error updating {company}: {e}")
             return False
 
 if __name__ == '__main__':
-    updater = GmailStatusUpdater()
-    updater.process_status_emails()
+    import argparse
+    import sys as _sys
+
+    if _sys.stdout.encoding and _sys.stdout.encoding.lower() != 'utf-8':
+        _sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+
+    parser = argparse.ArgumentParser(description='Gmail Job Status Updater')
+    parser.add_argument('--days', type=int, default=14,
+                        help='Cuántos días atrás revisar (default: 14)')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='Solo mostrar detecciones sin actualizar Sheets')
+    args = parser.parse_args()
+
+    print("=" * 60)
+    print("  AI JOB FOUNDRY — Gmail Status Updater")
+    print("=" * 60)
+
+    try:
+        updater = GmailStatusUpdater()
+        if args.dry_run:
+            print(f"\n🧪 MODO DRY-RUN — Revisando {args.days} días atrás...\n")
+            # Mostrar sin actualizar
+            query = f'newer_than:{args.days}d (from:noreply OR from:recruiting OR subject:interview OR subject:application OR subject:applicacion OR subject:entrevista)'
+            messages = updater.search_messages(query, max_results=100)
+            print(f"📧 {len(messages)} emails encontrados\n")
+            for msg in messages:
+                data = updater.get_message(msg['id'])
+                status = updater.detect_status(data.get('subject', ''), data.get('body', ''))
+                if status:
+                    company = updater.extract_company_from_email(data.get('from', ''), data.get('subject', ''))
+                    print(f"  [{status}] {company or '?'} — {data.get('subject', '')[:60]}")
+        else:
+            updater.process_status_emails(days_back=args.days)
+    except Exception as e:
+        print(f"❌ Error: {e}")
+        print("   Verifica que data/credentials/token.json exista y sea válido.")

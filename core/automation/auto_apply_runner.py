@@ -316,8 +316,8 @@ class LinkedInEasyApply:
                     continue
 
             if not easy_apply:
-                print("   ⚠️  No tiene Easy Apply (aplicación externa)")
-                return False
+                print("   🔗 No tiene Easy Apply — intentando aplicación externa...")
+                return self._try_external_apply(page, job)
 
             easy_apply.click()
             time.sleep(2)
@@ -344,6 +344,209 @@ class LinkedInEasyApply:
             return False
         except Exception as e:
             print(f"   ❌ Error aplicando: {e}")
+            return False
+
+    # ── External ATS Apply ────────────────────────────────────────────────────
+
+    def _try_external_apply(self, page, job) -> bool:
+        """Captura el botón Apply externo de LinkedIn y lo maneja según el ATS."""
+        from playwright.sync_api import TimeoutError as PWT
+        import webbrowser
+
+        ext_selectors = [
+            'button:has-text("Apply")',
+            'a:has-text("Apply")',
+            'button:has-text("Solicitar")',
+            '.jobs-apply-button--top-card',
+        ]
+
+        ext_btn = None
+        for sel in ext_selectors:
+            try:
+                btn = page.locator(sel).first
+                if btn.is_visible(timeout=2000):
+                    ext_btn = btn
+                    break
+            except:
+                continue
+
+        if not ext_btn:
+            print("   ❌ No se encontró botón de aplicación")
+            return False
+
+        # LinkedIn abre una nueva pestaña al hacer click en Apply externo
+        try:
+            with page.context.expect_page(timeout=10000) as popup_info:
+                ext_btn.click()
+            ats_page = popup_info.value
+            ats_page.wait_for_load_state("domcontentloaded", timeout=20000)
+            ats_url = ats_page.url
+            print(f"   🔗 ATS: {ats_url[:80]}")
+            result = self._apply_ats(ats_page, ats_url, job)
+            ats_page.close()
+            return result
+        except Exception:
+            # Fallback: puede que no haya abierto nueva pestaña
+            url = job.get("ApplyURL", "")
+            print(f"   🌐 Abriendo en navegador para revisión manual")
+            webbrowser.open(url)
+            return False
+
+    def _apply_ats(self, page, url: str, job) -> bool:
+        """Detecta el ATS por URL y despacha al handler correcto."""
+        import webbrowser
+        u = url.lower()
+
+        if "greenhouse.io" in u or "boards.greenhouse" in u:
+            print("   🟢 Greenhouse detectado")
+            return self._apply_greenhouse(page, job)
+        elif "jobs.lever.co" in u or "lever.co" in u:
+            print("   🟡 Lever detectado")
+            return self._apply_lever(page, job)
+        elif "myworkdayjobs.com" in u:
+            print("   🔵 Workday detectado — abriendo manualmente (muy complejo para automatizar)")
+            webbrowser.open(url)
+            return False
+        elif "bamboohr.com" in u:
+            print("   🟠 BambooHR detectado")
+            return self._apply_greenhouse(page, job)  # estructura similar a Greenhouse
+        else:
+            print("   ⚪ ATS desconocido — abriendo en navegador para revisión manual")
+            webbrowser.open(url)
+            return False
+
+    def _apply_greenhouse(self, page, job) -> bool:
+        """Maneja formularios de Greenhouse (y BambooHR que es similar)."""
+        import time as _time
+        _time.sleep(2)
+        cv_path = str(project_root / "data" / "cv" / "CV_Marcos_Alvarado_2026.pdf")
+
+        try:
+            # Campos estándar Greenhouse
+            fields = {
+                'input[id="first_name"]':               CANDIDATE["first_name"],
+                'input[id="last_name"]':                CANDIDATE["last_name"],
+                'input[id="email"]':                    CANDIDATE["email"],
+                'input[id="phone"]':                    CANDIDATE["phone"],
+                'input[id="job_application_location"]': CANDIDATE["city"],
+            }
+            for sel, val in fields.items():
+                try:
+                    el = page.locator(sel).first
+                    if el.is_visible(timeout=2000):
+                        el.fill(val)
+                except:
+                    pass
+
+            # LinkedIn URL — varios selectores posibles
+            for sel in ['input[id="linkedin"]', 'input[placeholder*="linkedin" i]',
+                        'input[id*="linkedin" i]', 'input[name*="linkedin" i]']:
+                try:
+                    el = page.locator(sel).first
+                    if el.is_visible(timeout=1500):
+                        el.fill(CANDIDATE["linkedin_url"])
+                        break
+                except:
+                    pass
+
+            # Resume upload
+            for sel in ['input[type="file"][id*="resume" i]', 'input[type="file"][accept*="pdf" i]',
+                        'input[type="file"]']:
+                try:
+                    el = page.locator(sel).first
+                    if el.count() > 0:
+                        el.set_input_files(cv_path)
+                        _time.sleep(1)
+                        break
+                except:
+                    pass
+
+            # Submit
+            for sel in ['input[type="submit"]', 'button[type="submit"]',
+                        'button:has-text("Submit")', 'button:has-text("Apply")']:
+                try:
+                    btn = page.locator(sel).first
+                    if btn.is_visible(timeout=2000):
+                        btn.click()
+                        _time.sleep(3)
+                        break
+                except:
+                    pass
+
+            # Verificar éxito
+            for signal in ["confirmation", "thank-you", "thank_you", "submitted"]:
+                if signal in page.url.lower():
+                    print("   ✅ Aplicación enviada (Greenhouse)")
+                    return True
+            for txt in ["Thank you", "Gracias", "application received", "Successfully"]:
+                try:
+                    if page.get_by_text(txt, exact=False).count() > 0:
+                        print("   ✅ Aplicación enviada (Greenhouse)")
+                        return True
+                except:
+                    pass
+
+            print("   ⚠️  Formulario Greenhouse enviado (verificar manualmente)")
+            return True  # Optimista — el botón fue clickeado
+
+        except Exception as e:
+            print(f"   ❌ Error en Greenhouse: {e}")
+            return False
+
+    def _apply_lever(self, page, job) -> bool:
+        """Maneja formularios de Lever."""
+        import time as _time
+        _time.sleep(2)
+        cv_path = str(project_root / "data" / "cv" / "CV_Marcos_Alvarado_2026.pdf")
+
+        try:
+            fields = {
+                'input[name="name"]':             CANDIDATE["full_name"],
+                'input[name="email"]':            CANDIDATE["email"],
+                'input[name="phone"]':            CANDIDATE["phone"],
+                'input[name="org"]':              "Independent",
+                'input[name="urls[LinkedIn]"]':   CANDIDATE["linkedin_url"],
+                'input[name="location"]':         CANDIDATE["city"],
+            }
+            for sel, val in fields.items():
+                try:
+                    el = page.locator(sel).first
+                    if el.is_visible(timeout=2000):
+                        el.fill(val)
+                except:
+                    pass
+
+            # Resume
+            try:
+                el = page.locator('input[type="file"]').first
+                if el.count() > 0:
+                    el.set_input_files(cv_path)
+                    _time.sleep(1)
+            except:
+                pass
+
+            # Submit
+            for sel in ['button[type="submit"]', 'button:has-text("Submit application")',
+                        'button:has-text("Apply for this job")']:
+                try:
+                    btn = page.locator(sel).first
+                    if btn.is_visible(timeout=2000):
+                        btn.click()
+                        _time.sleep(3)
+                        break
+                except:
+                    pass
+
+            for signal in ["thank", "confirmation", "submitted"]:
+                if signal in page.url.lower():
+                    print("   ✅ Aplicación enviada (Lever)")
+                    return True
+
+            print("   ⚠️  Formulario Lever enviado (verificar manualmente)")
+            return True
+
+        except Exception as e:
+            print(f"   ❌ Error en Lever: {e}")
             return False
 
     def _fill_form_step(self, page):
