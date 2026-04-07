@@ -1,218 +1,124 @@
-# 🤖 AI Job Foundry
+# AI Job Foundry
 
-Sistema automatizado de búsqueda de empleo con IA local que procesa ofertas de LinkedIn, Indeed y Glassdoor.
+> Automated job hunting pipeline — from email to application, powered by local AI.
 
-## 🎯 Características
+Gmail → Google Sheets → FIT Score → LinkedIn Easy Apply. No cloud API costs. No resume leaks.
 
-- ✅ **Procesamiento automatizado de emails** - Gmail API
-- ✅ **Scraping inteligente** - Playwright + Firefox
-- ✅ **Análisis con IA local** - LM Studio + Qwen 2.5 14B
-- ✅ **Cálculo de FIT SCORES** - 0-10 basado en perfil
-- ✅ **Verificación de expirados** - Smart verifiers por plataforma
-- ✅ **Tracking en Google Sheets** - Integración completa
-- ✅ **Auto-apply LinkedIn** - Easy Apply automation
-- 🚧 **Interview Copilot** - En desarrollo
-
-## 🛠️ Stack Tecnológico
-
-- **Python 3.13** - Core del sistema
-- **LM Studio** - IA local (Qwen 2.5 14B)
-- **Playwright** - Web scraping y verificación
-- **Gmail API** - Procesamiento de emails
-- **Google Sheets API** - Tracking y storage
-- **Flask** - Dashboard web
-- **PowerShell** - Scripts de automatización
-
-## 📋 Requisitos
-
-### Software
-- Python 3.13+
-- LM Studio (o servidor LLM compatible con OpenAI API)
-- Windows 11 (o adaptar scripts para Linux/Mac)
-- Navegador Firefox (para Playwright)
-
-### APIs y Credenciales
-- Google Cloud Project con Gmail y Sheets APIs habilitadas
-- Cuenta de LinkedIn (para scraping y auto-apply)
-- Cuentas de Indeed/Glassdoor (opcional)
-
-## 🚀 Instalación
-
-### 1. Clonar repositorio
-```bash
-git clone https://github.com/TU_USUARIO/ai-job-foundry.git
-cd ai-job-foundry
-```
-
-### 2. Instalar dependencias
-```bash
-pip install -r requirements.txt
-playwright install firefox
-```
-
-### 3. Configurar credenciales
-
-**IMPORTANTE:** Nunca subas archivos de credenciales al repositorio.
-
-#### A) Google OAuth
-1. Crea proyecto en [Google Cloud Console](https://console.cloud.google.com)
-2. Habilita Gmail API y Google Sheets API
-3. Crea credenciales OAuth 2.0
-4. Descarga como `data/credentials/credentials.json`
-
-#### B) Variables de entorno
-Crea archivo `.env` en la raíz:
-```bash
-# Google
-GOOGLE_SHEETS_ID=tu_spreadsheet_id
-
-# LinkedIn
-LINKEDIN_EMAIL=tu_email@gmail.com
-LINKEDIN_PASSWORD=tu_password
-
-# Gmail
-GMAIL_ADDRESS=tu_email@gmail.com
-
-# LM Studio (opcional)
-LM_STUDIO_URL=http://127.0.0.1:11434
-```
-
-#### C) CV Descriptor
-Crea `data/cv_descriptor.txt` con tu perfil profesional para el análisis de IA.
-
-### 4. Primera ejecución
-```bash
-# Generar token OAuth (abrirá navegador)
-py FIX_OAUTH_TOKEN.py
-
-# Ejecutar control center
-py control_center.py
-```
-
-## 📊 Estructura del Proyecto
-
-```
-ai-job-foundry/
-├── core/
-│   ├── ingestion/       # Scrapers (LinkedIn, Indeed, Glassdoor)
-│   ├── enrichment/      # IA analyzer, cover letter gen
-│   ├── sheets/          # Google Sheets manager
-│   ├── automation/      # Gmail monitor, auto-apply
-│   └── utils/           # LLM client, helpers
-├── data/
-│   ├── credentials/     # OAuth (NO SUBIR A GIT)
-│   ├── state/           # Tracking de procesados
-│   └── cv_descriptor.txt # Tu perfil (NO SUBIR A GIT)
-├── logs/                # Session logs
-├── scripts/             # Scripts de prueba
-├── web/                 # Dashboard Flask
-├── *.py                 # Verifiers y utilities
-└── control_center.py    # Menú principal
-```
-
-## 🎮 Uso
-
-### Control Center (Recomendado)
-```bash
-py control_center.py
-```
-Menú interactivo con todas las opciones.
-
-### Pipeline Completo
-```bash
-py run_daily_pipeline.py --all
-```
-Ejecuta: emails → boletines → IA → auto-apply → verificación → reporte
-
-### Operaciones Individuales
-```bash
-# Procesar emails
-py control_center.py  # Opción 3
-
-# Verificar LinkedIn
-py control_center.py  # Opción 7
-
-# Análisis IA
-py control_center.py  # Opción 5
-```
-
-## 📈 Pipeline Workflow
-
-```
-┌─────────────────┐
-│  Gmail Monitor  │ ← Emails de reclutadores
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Bulletin Parser │ ← Boletines (LinkedIn/Indeed/Glassdoor)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   AI Analyzer   │ ← Calcula FIT SCORES (0-10)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Google Sheets   │ ← Guarda jobs + scores
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│ Smart Verifiers │ ← Verifica URLs (Playwright)
-└────────┬────────┘
-         │
-         ▼
-┌─────────────────┐
-│   Auto-Apply    │ ← Aplica a FIT 7+ (LinkedIn Easy Apply)
-└─────────────────┘
-```
-
-## 🔧 Troubleshooting
-
-### LM Studio no responde
-```powershell
-.\detect_lm_studio_ip.ps1
-```
-
-### Unicode errors
-```powershell
-.\fix_unicode_all.ps1
-Get-Process python* | Stop-Process -Force
-```
-
-### OAuth expirado
-```powershell
-py FIX_OAUTH_TOKEN.py
-```
-
-## 📝 Notas Importantes
-
-- **Privacidad:** Toda la IA corre local (LM Studio), no se envía data a APIs externas
-- **Credenciales:** NUNCA subir `.env`, `credentials.json`, `token.json` a GitHub
-- **Rate Limits:** Respeta los límites de las APIs (Gmail, Sheets, LinkedIn)
-- **Uso Ético:** Solo para búsqueda personal de empleo
-
-## 🤝 Contribuciones
-
-Este es un proyecto personal, pero si quieres contribuir:
-1. Fork el repo
-2. Crea una branch (`git checkout -b feature/AmazingFeature`)
-3. Commit cambios (`git commit -m 'Add AmazingFeature'`)
-4. Push a la branch (`git push origin feature/AmazingFeature`)
-5. Abre un Pull Request
-
-## 📄 Licencia
-
-Uso personal. No redistribuir sin permiso.
-
-## 👤 Autor
-
-**Marcos Alberto Alvarado de la Torre**
-- Project Manager / Business Analyst
-- Guadalajara, México
+[![Python](https://img.shields.io/badge/Python-3.13-3776AB?logo=python&logoColor=white)](https://python.org)
+[![LM Studio](https://img.shields.io/badge/LM_Studio-Qwen_2.5_14B-FF6B35)](https://lmstudio.ai)
+[![Playwright](https://img.shields.io/badge/Playwright-Automation-45ba4b)](https://playwright.dev)
 
 ---
 
-⭐ Si te sirvió este proyecto, dale una estrella!
+## Pipeline
+
+```
+┌─────────┐   ┌──────────────┐   ┌───────────┐   ┌──────────────┐
+│  Gmail  │──▶│ Google Sheets│──▶│ FIT Score │──▶│  Easy Apply  │
+│Ingestion│   │  271+ jobs   │   │  (0-10)   │   │ + Cover CL   │
+└─────────┘   └──────────────┘   └───────────┘   └──────────────┘
+                     │                                    │
+             ┌───────▼────────┐                ┌──────────▼──────┐
+             │ Dedup + Clean  │                │Telegram Notifier│
+             └────────────────┘                └─────────────────┘
+```
+
+---
+
+## Features
+
+- [x] Gmail ingestion — parses LinkedIn job alert emails, extracts valid job URLs
+- [x] Smart URL normalization — canonical `linkedin.com/jobs/view/{ID}`, filters junk links
+- [x] FIT scoring — local LLM rates each job 0-10 against your profile
+- [x] Deduplication — removes duplicates and expired listings automatically
+- [x] Auto-apply — LinkedIn Easy Apply via Playwright with AI cover letters
+- [x] Cover letter generation — tailored per-job CLs using Qwen 2.5 14B locally
+- [x] Telegram notifications — morning summary, daily stats, apply confirmations
+- [x] Chalan memory — AI learns from past applications across sessions
+- [x] US-only filter — auto-detects and skips US-only postings for MX/LATAM applicants
+- [x] Windows Task Scheduler — fully automated daily pipeline
+
+---
+
+## Stack
+
+| Layer | Technology |
+|---|---|
+| Language | Python 3.13 |
+| Local LLM | LM Studio + Qwen 2.5 14B |
+| Browser automation | Playwright + Firefox |
+| Data store | Google Sheets API |
+| Email | Gmail API + OAuth2 |
+| Notifications | Telegram Bot API |
+| Scheduler | Windows Task Scheduler + PowerShell |
+
+---
+
+## Quick Start
+
+```bash
+git clone https://github.com/MarcosAlvaradoD/ai-job-foundry.git
+cd ai-job-foundry
+pip install -r requirements.txt
+playwright install firefox
+cp .env.example .env
+# Fill: Gmail OAuth, Google Sheets ID, Telegram token, LM Studio URL
+py scripts/maintenance/run_maintenance.py
+```
+
+---
+
+## Main Commands
+
+```bash
+# Maintenance: enrich + dedup + clean + score
+py scripts/maintenance/run_maintenance.py
+
+# Check readiness before applying
+py scripts/apply/check_apply_readiness.py
+
+# Generate cover letters (FIT >= 8)
+py scripts/apply/generate_cover_letters.py --min 8
+
+# Auto-apply
+py scripts/apply/run_autoapply.py --dry-run
+py scripts/apply/run_autoapply.py --submit --max 10
+
+# Morning summary to Telegram
+py scripts/morning_summary.py
+```
+
+---
+
+## Automation Schedule
+
+| Time | Task |
+|---|---|
+| 07:00 | morning_summary — daily digest to Telegram |
+| 09:00 | maintenance — enrich, dedup, clean, score |
+| 12:00 | fit_scores — score any unscored listings |
+| Weekly | deep_clean — remove long-expired postings |
+
+One-time setup (run as Admin): `.\scripts\setup_daily_tasks.ps1`
+
+---
+
+## Why Local AI?
+
+**Privacy** — resume and job history never leave your machine.
+
+**No API costs** — 0 cents per inference. Score 271 jobs daily, generate cover letters, zero billing.
+
+**RTX 4090 capable** — Qwen 2.5 14B at full speed locally. Fast enough for batch pipelines.
+
+---
+
+## Built by
+
+**Marcos Alberto Alvarado De La Torre** — PM / BA / Automation engineer — Mexico
+
+> Built out of necessity. Tired of applying manually. Let the machine hunt.
+
+---
+
+*271 jobs tracked. Pipeline running daily.*
