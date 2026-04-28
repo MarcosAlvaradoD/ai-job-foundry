@@ -25,7 +25,7 @@ Abre en navegador: http://localhost:5000
 
 ```javascript
 // ❌ INSEGURO - API key expuesta públicamente
-const API_KEY = 'AIzaSyDG8mhYE7RYJ4wZx3eJ7Qz_0xK9LZ8x1Yk';
+const API_KEY = '[GEMINI_API_KEY_REDACTED]';
 ```
 
 Cualquiera con acceso al código puede:

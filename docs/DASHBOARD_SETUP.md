@@ -22,7 +22,7 @@ El dashboard necesita una API Key de Google para leer los datos de Google Sheets
    - Copia la API Key generada
 
 5. **Edita dashboard.html:**
-   - Línea 242: Reemplaza `AIzaSyDG8mhYE7RYJ4wZx3eJ7Qz_0xK9LZ8x1Yk` con tu API Key real
+   - Línea 242: Reemplaza `[GEMINI_API_KEY_REDACTED]` con tu API Key real
 
 6. **Abre dashboard.html en tu navegador**
 

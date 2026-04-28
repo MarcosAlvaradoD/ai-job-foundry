@@ -17,7 +17,7 @@
 **Archivo:** `web/dashboard.html`  
 **Línea 171:**
 ```javascript
-const API_KEY = 'AIzaSyDG8mhYE7RYJ4wZx3eJ7Qz_0xK9LZ8x1Yk'; // ❌ EXPUESTO
+const API_KEY = '[GEMINI_API_KEY_REDACTED]'; // ❌ EXPUESTO
 ```
 
 **Por qué es grave:**
