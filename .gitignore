@@ -130,3 +130,19 @@ data/raw_jobs/
 
 # Perfil personal — contiene email, tel, salario esperado
 data/cv_profile.json
+
+# CV files — documentos personales
+data/cv/
+data/cvs/
+
+# Credential backups y revocados
+data/credentials/*.backup*
+data/credentials/*.revoked
+data/credentials/*.old
+
+# Claude Code internal — worktrees y estado interno
+.claude/worktrees/
+.claude/settings.local.json
+
+# Paginas de ejemplo (HTML grandes sin valor en CI)
+paginas ejemplo para aplicar/
