@@ -95,7 +95,7 @@ async def select_option(page, id_selector, value, field_name):
         await page.select_option(f'#{id_selector}', label=value, timeout=3000)
         print(f"  ✅ {field_name}: {value}")
         return True
-    except:
+    except Exception:
         try:
             # Intentar por value
             await page.select_option(f'#{id_selector}', value=value, timeout=3000)

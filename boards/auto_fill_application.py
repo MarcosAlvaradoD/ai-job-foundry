@@ -58,7 +58,7 @@ class AutoFormFiller:
                         label_elem = await page.query_selector(f'label[for="{field_id}"]')
                         if label_elem:
                             label = await label_elem.inner_text()
-                except:
+                except Exception:
                     pass
                 
                 options = []
@@ -79,7 +79,7 @@ class AutoFormFiller:
                 
                 fields.append(field_info)
                 print(f"  📝 {field_name} ({field_type}) - {label} {'[REQ]' if field_required else ''}")
-            except:
+            except Exception:
                 continue
         
         return fields
@@ -117,7 +117,7 @@ class AutoFormFiller:
             try:
                 response = self.llm_client.complete(prompt, max_tokens=200)
                 return response.strip()
-            except:
+            except Exception:
                 return self.cv_data['perfil']
         
         if field['options']:

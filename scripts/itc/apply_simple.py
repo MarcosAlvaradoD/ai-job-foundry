@@ -61,7 +61,7 @@ async def fill_form_with_js(page):
         try:
             await page.fill(selector, value, timeout=2000)
             print(f"  ✅ {selector[:30]}... = {value}")
-        except:
+        except Exception:
             print(f"  ⚠️  {selector[:30]}... - no encontrado")
     
     await asyncio.sleep(1)

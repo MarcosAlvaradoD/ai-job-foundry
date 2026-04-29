@@ -73,11 +73,20 @@ def build_summary(dry_run: bool = False) -> str:
     no_score = 0
     top_jobs = []  # (fit, tab, role) para las mejores
 
+    # Validate which tabs actually exist in the sheet
+    try:
+        existing_tabs = {t.lower() for t in sm.tabs.keys()}
+    except Exception:
+        existing_tabs = set(ACTIVE_TABS)
+
     for tab in ACTIVE_TABS:
+        if tab.lower() not in existing_tabs:
+            print(f"  [SKIP] Tab '{tab}' no configurado en SheetManager — omitiendo")
+            continue
         try:
             jobs = sm.get_all_jobs(tab)
         except Exception as e:
-            print(f"  [WARN] No se pudo leer {tab}: {e}")
+            print(f"  [WARN] No se pudo leer tab '{tab}': {e}")
             continue
 
         for job in jobs:
@@ -119,7 +128,7 @@ def build_summary(dry_run: bool = False) -> str:
 
     for score in sorted(counts.keys(), reverse=True):
         bar_count = counts[score]
-        bar = "■" * min(bar_count, 20)
+        bar = "#" * min(bar_count, 20)
         lines.append(f"  {score:2d}/10  [{bar}]  {bar_count}")
 
     # Top 5 ofertas
@@ -150,8 +159,7 @@ def send_telegram(message: str) -> bool:
         url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
         r = requests.post(url, json={
             "chat_id": TELEGRAM_CHAT_ID,
-            "text": message,
-            "parse_mode": "HTML"
+            "text": message
         }, timeout=15)
         if r.status_code == 200:
             print("[OK] Mensaje enviado a Telegram")

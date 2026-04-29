@@ -16,7 +16,7 @@ try:
     YELLOW = Fore.YELLOW
     CYAN = Fore.CYAN
     RESET = Style.RESET_ALL
-except:
+except Exception:
     GREEN = RED = YELLOW = CYAN = RESET = ''
 
 TOKEN_FILE = Path("data/credentials/token.json")

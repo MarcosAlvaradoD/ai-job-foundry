@@ -5,9 +5,11 @@
 # ========================================
 # CREDENTIALS - NEVER UPLOAD TO GITHUB
 # ========================================
-# Google OAuth
+# Google OAuth + LinkedIn session — NUNCA subir a GitHub
 data/credentials/*.json
 data/credentials/credentials.json
+data/credentials/linkedin_auth.json
+data/credentials/linkedin_session.json
 data/credentials/token.json
 workflows/google_credentials.json
 workflows/token.json
@@ -125,3 +127,6 @@ mcp-servers/
 
 # Raw scraped data
 data/raw_jobs/
+
+# Perfil personal — contiene email, tel, salario esperado
+data/cv_profile.json

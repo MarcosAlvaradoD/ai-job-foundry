@@ -86,7 +86,7 @@ def investigate_glassdoor_job(url):
                         apply_button = page.locator(selector).first
                         print(f"   [+] Found apply button: {selector}")
                         break
-                except:
+                except Exception:
                     pass
             
             if not apply_button:
@@ -102,7 +102,7 @@ def investigate_glassdoor_job(url):
                             href = link.get_attribute('href')
                             text = link.inner_text()
                             print(f"      {i+1}. {text}: {href[:50]}...")
-                        except:
+                        except Exception:
                             pass
             
             # Get page title and company

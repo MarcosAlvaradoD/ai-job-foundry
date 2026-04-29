@@ -230,7 +230,7 @@ class UniversalJobVerifier:
         finally:
             try:
                 page.close()
-            except:
+            except Exception:
                 pass
     
     def mark_job_status(self, job, new_status, reason):

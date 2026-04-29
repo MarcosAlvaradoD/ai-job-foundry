@@ -181,17 +181,17 @@ def recalculate_fit_scores():
         # Find columns
         try:
             comp_col = headers.index('Comp')
-        except:
+        except Exception:
             comp_col = 9  # Column J
         
         try:
             fit_col = headers.index('FitScore')
-        except:
+        except Exception:
             fit_col = 16  # Column Q
         
         try:
             why_col = headers.index('Why')
-        except:
+        except Exception:
             why_col = 17  # Column R
         
         updated_count = 0
@@ -223,7 +223,7 @@ def recalculate_fit_scores():
             # Get current FIT score
             try:
                 current_score = int(str(current_fit).split('/')[0]) if current_fit else 5
-            except:
+            except Exception:
                 current_score = 5
             
             # Calculate new score

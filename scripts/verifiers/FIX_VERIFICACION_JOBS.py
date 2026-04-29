@@ -74,7 +74,7 @@ def apply_fix():
                 try:
                     if int(fit_score) >= 7:
                         jobs_to_verify.append(job)
-                except:
+                except Exception:
                     pass"""
     
     new_block = """        # Get jobs to verify (all status except final ones, all FIT scores)

@@ -67,17 +67,17 @@ def check_all_jobs():
             # Find columns
             try:
                 source_col = headers.index('Source')
-            except:
+            except Exception:
                 source_col = 6
             
             try:
                 fit_col = headers.index('FitScore')
-            except:
+            except Exception:
                 fit_col = 15
             
             try:
                 status_col = headers.index('Status')
-            except:
+            except Exception:
                 status_col = 12
             
             # Count stats
@@ -101,7 +101,7 @@ def check_all_jobs():
                         fit_num = float(fit_score.split('/')[0])
                         if fit_num >= 7:
                             tab_fit_7_plus += 1
-                    except:
+                    except Exception:
                         pass
                 
                 # Count LinkedIn

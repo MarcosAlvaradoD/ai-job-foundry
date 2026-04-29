@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Foundry - Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body class="bg-gray-50">
+    <!-- Loading -->
+    <div id="loading" class="flex items-center justify-center h-screen">
+        <div class="text-center">
+            <div class="inline-block animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+            <p class="mt-4 text-gray-600">Cargando datos...</p>
+        </div>
+    </div>
+
+    <!-- Error -->
+    <div id="error" class="hidden flex items-center justify-center h-screen">
+        <div class="text-center max-w-md p-6 bg-white rounded-lg shadow">
+            <h2 class="text-2xl font-bold text-red-600 mb-4">Error</h2>
+            <p id="error-message" class="text-gray-700"></p>
+            <button onclick="location.reload()" class="mt-4 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700">
+                Reintentar
+            </button>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="main-content" class="hidden">
+        <!-- Header -->
+        <header class="bg-white shadow">
+            <div class="max-w-7xl mx-auto px-4 py-6 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center">
+                    <h1 class="text-3xl font-bold text-gray-900">🚀 AI Job Foundry</h1>
+                    <div class="text-sm text-gray-500">
+                        Última actualización: <span id="last-update"></span>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <main class="max-w-7xl mx-auto px-4 py-8 sm:px-6 lg:px-8">
+            <!-- Stats Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="text-sm font-medium text-gray-500 mb-2">Total Aplicaciones</div>
+                    <div class="text-3xl font-bold text-gray-900" id="total-apps">0</div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="text-sm font-medium text-gray-500 mb-2">High Match (8+)</div>
+                    <div class="text-3xl font-bold text-green-600" id="high-match">0</div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="text-sm font-medium text-gray-500 mb-2">FIT Score Promedio</div>
+                    <div class="text-3xl font-bold text-blue-600" id="avg-score">0</div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <div class="text-sm font-medium text-gray-500 mb-2">Hoy</div>
+                    <div class="text-3xl font-bold text-purple-600" id="today-count">0</div>
+                </div>
+            </div>
+
+            <!-- Charts Row -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-lg font-bold mb-4">Distribución de FIT Scores</h3>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="scoreChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-md">
+                    <h3 class="text-lg font-bold mb-4">Jobs por Fuente</h3>
+                    <div style="height: 300px; position: relative;">
+                        <canvas id="sourceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Matches Table -->
+            <div class="bg-white rounded-lg shadow-md overflow-hidden mb-8">
+                <div class="p-6 border-b">
+                    <h3 class="text-lg font-bold">Top Matches (FIT Score 8+)</h3>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Company</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Role</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Source</th>
+                                <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">FIT Score</th>
+                            </tr>
+                        </thead>
+                        <tbody id="top-matches-body" class="bg-white divide-y divide-gray-200">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script>
+        // CONFIGURACIÓN - USA BACKEND SEGURO (NO API KEY EXPUESTA)
+        const API_BASE = 'http://localhost:5000/api';
+        
+        let allJobs = [];
+        let scoreChart, sourceChart;
+
+        // Cargar datos desde backend
+        async function loadData() {
+            try {
+                const response = await fetch(`${API_BASE}/jobs`);
+                if (!response.ok) throw new Error('Error al cargar datos');
+                
+                const data = await response.json();
+                
+                if (!data.success) throw new Error(data.error);
+                
+                allJobs = data.jobs;
+                
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('main-content').classList.remove('hidden');
+                
+                updateDashboard();
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('error').classList.remove('hidden');
+                document.getElementById('error-message').textContent = 
+                    `Error: ${error.message}. Verifica que el backend esté corriendo (py dashboard_backend.py)`;
+            }
+        }
+
+        // Actualizar todo el dashboard
+        function updateDashboard() {
+            updateStats();
+            updateCharts();
+            updateTopMatches();
+            updateLastUpdate();
+        }
+
+        // Actualizar estadísticas
+        function updateStats() {
+            document.getElementById('total-apps').textContent = allJobs.length;
+            
+            const highMatch = allJobs.filter(j => j.fitScore >= 8).length;
+            document.getElementById('high-match').textContent = highMatch;
+            
+            const avgScore = allJobs.length > 0 
+                ? (allJobs.reduce((sum, j) => sum + j.fitScore, 0) / allJobs.length).toFixed(1)
+                : 0;
+            document.getElementById('avg-score').textContent = avgScore;
+            
+            const today = new Date().toISOString().split('T')[0];
+            const todayCount = allJobs.filter(j => j.createdAt.startsWith(today)).length;
+            document.getElementById('today-count').textContent = todayCount;
+        }
+
+        // Actualizar gráficas
+        function updateCharts() {
+            // Score distribution
+            const scoreRanges = { '0-3': 0, '4-6': 0, '7-8': 0, '9-10': 0 };
+            allJobs.forEach(j => {
+                if (j.fitScore <= 3) scoreRanges['0-3']++;
+                else if (j.fitScore <= 6) scoreRanges['4-6']++;
+                else if (j.fitScore <= 8) scoreRanges['7-8']++;
+                else scoreRanges['9-10']++;
+            });
+
+            if (scoreChart) scoreChart.destroy();
+            scoreChart = new Chart(document.getElementById('scoreChart'), {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(scoreRanges),
+                    datasets: [{
+                        label: 'Jobs',
+                        data: Object.values(scoreRanges),
+                        backgroundColor: ['#ef4444', '#f59e0b', '#3b82f6', '#10b981']
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false 
+                }
+            });
+
+            // Source distribution
+            const sources = {};
+            allJobs.forEach(j => {
+                sources[j.source] = (sources[j.source] || 0) + 1;
+            });
+
+            if (sourceChart) sourceChart.destroy();
+            sourceChart = new Chart(document.getElementById('sourceChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(sources),
+                    datasets: [{
+                        data: Object.values(sources),
+                        backgroundColor: ['#3b82f6', '#f59e0b', '#10b981', '#8b5cf6']
+                    }]
+                },
+                options: { 
+                    responsive: true, 
+                    maintainAspectRatio: false 
+                }
+            });
+        }
+
+        // Actualizar tabla de top matches
+        function updateTopMatches() {
+            const topJobs = allJobs
+                .filter(j => j.fitScore >= 8)
+                .sort((a, b) => b.fitScore - a.fitScore)
+                .slice(0, 10);
+
+            const tbody = document.getElementById('top-matches-body');
+            tbody.innerHTML = '';
+
+            topJobs.forEach(job => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${job.company}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${job.role}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getSourceBadgeClass(job.source)}">
+                            ${job.source}
+                        </span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                            ${job.fitScore}/10
+                        </span>
+                    </td>
+                `;
+                tbody.appendChild(row);
+            });
+        }
+
+        function getSourceBadgeClass(source) {
+            const classes = {
+                'LinkedIn': 'bg-blue-100 text-blue-800',
+                'Indeed': 'bg-orange-100 text-orange-800',
+                'Glassdoor': 'bg-green-100 text-green-800'
+            };
+            return classes[source] || 'bg-gray-100 text-gray-800';
+        }
+
+        function updateLastUpdate() {
+            const now = new Date();
+            const formatted = now.toLocaleString('es-MX', {
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+            document.getElementById('last-update').textContent = formatted;
+        }
+
+        // Iniciar
+        loadData();
+        setInterval(loadData, 60000); // Actualizar cada minuto
+    </script>
+</body>
+</html>

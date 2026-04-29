@@ -65,14 +65,14 @@ class LinkedInWorkflow:
                 # Real error
                 try:
                     print(f"❌ Scraping failed: {e}")
-                except:
+                except Exception:
                     pass  # Can't print error either
                 self.results['scrape'] = 'FAIL'
                 return False
         except Exception as e:
             try:
                 print(f"❌ Scraping failed: {e}")
-            except:
+            except Exception:
                 pass  # Can't print error
             self.results['scrape'] = 'FAIL'
             return False

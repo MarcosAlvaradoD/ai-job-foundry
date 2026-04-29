@@ -67,7 +67,7 @@ async def check_job_status(page, url: str) -> dict:
                     'error_text': None,
                     'status': 'ACTIVE'
                 }
-        except:
+        except Exception:
             pass
         
         try:
@@ -80,7 +80,7 @@ async def check_job_status(page, url: str) -> dict:
                     'error_text': None,
                     'status': 'ACTIVE'
                 }
-        except:
+        except Exception:
             pass
         
         return {

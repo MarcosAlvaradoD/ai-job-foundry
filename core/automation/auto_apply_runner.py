@@ -54,7 +54,7 @@ CANDIDATE        = {
     "city":             "Guadalajara",
     "country":          "Mexico",
     "years_experience": "10",
-    "linkedin_url":     "https://www.linkedin.com/in/marcos-alvarado",
+    "linkedin_url":     "https://www.linkedin.com/in/marcosalvarado-it",
 }
 
 LINKEDIN_EMAIL    = os.getenv("LINKEDIN_EMAIL", "")
@@ -71,7 +71,7 @@ def safe_fit(val) -> int:
     try:
         s = str(val or "").strip()
         return int(s.split("/")[0]) if "/" in s else int(s)
-    except:
+    except Exception:
         return 0
 
 def load_applied() -> set:
@@ -79,7 +79,7 @@ def load_applied() -> set:
         if APPLIED_LOG.exists():
             data = json.loads(APPLIED_LOG.read_text())
             return {j["apply_url"] for j in data if "apply_url" in j}
-    except:
+    except Exception:
         pass
     return set()
 
@@ -89,7 +89,7 @@ def save_applied(jobs: list):
     try:
         if APPLIED_LOG.exists():
             existing = json.loads(APPLIED_LOG.read_text())
-    except:
+    except Exception:
         pass
     existing.extend(jobs)
     APPLIED_LOG.write_text(json.dumps(existing, indent=2, ensure_ascii=False))
@@ -240,7 +240,7 @@ class LinkedInEasyApply:
             COOKIES_FILE.parent.mkdir(exist_ok=True)
             COOKIES_FILE.write_text(json.dumps(cookies))
             print(f"✅ Cookies guardadas")
-        except:
+        except Exception:
             pass
 
     def _ensure_login(self, page):
@@ -251,7 +251,7 @@ class LinkedInEasyApply:
             if "/feed" in page.url:
                 print("✅ Sesión activa")
                 return True
-        except:
+        except Exception:
             pass
 
         # Auto-login
@@ -312,7 +312,7 @@ class LinkedInEasyApply:
                     if btn.is_visible(timeout=3000):
                         easy_apply = btn
                         break
-                except:
+                except Exception:
                     continue
 
             if not easy_apply:
@@ -367,7 +367,7 @@ class LinkedInEasyApply:
                 if btn.is_visible(timeout=2000):
                     ext_btn = btn
                     break
-            except:
+            except Exception:
                 continue
 
         if not ext_btn:
@@ -435,7 +435,7 @@ class LinkedInEasyApply:
                     el = page.locator(sel).first
                     if el.is_visible(timeout=2000):
                         el.fill(val)
-                except:
+                except Exception:
                     pass
 
             # LinkedIn URL — varios selectores posibles
@@ -446,7 +446,7 @@ class LinkedInEasyApply:
                     if el.is_visible(timeout=1500):
                         el.fill(CANDIDATE["linkedin_url"])
                         break
-                except:
+                except Exception:
                     pass
 
             # Resume upload
@@ -458,7 +458,7 @@ class LinkedInEasyApply:
                         el.set_input_files(cv_path)
                         _time.sleep(1)
                         break
-                except:
+                except Exception:
                     pass
 
             # Submit
@@ -470,7 +470,7 @@ class LinkedInEasyApply:
                         btn.click()
                         _time.sleep(3)
                         break
-                except:
+                except Exception:
                     pass
 
             # Verificar éxito
@@ -483,7 +483,7 @@ class LinkedInEasyApply:
                     if page.get_by_text(txt, exact=False).count() > 0:
                         print("   ✅ Aplicación enviada (Greenhouse)")
                         return True
-                except:
+                except Exception:
                     pass
 
             print("   ⚠️  Formulario Greenhouse enviado (verificar manualmente)")
@@ -513,7 +513,7 @@ class LinkedInEasyApply:
                     el = page.locator(sel).first
                     if el.is_visible(timeout=2000):
                         el.fill(val)
-                except:
+                except Exception:
                     pass
 
             # Resume
@@ -522,7 +522,7 @@ class LinkedInEasyApply:
                 if el.count() > 0:
                     el.set_input_files(cv_path)
                     _time.sleep(1)
-            except:
+            except Exception:
                 pass
 
             # Submit
@@ -534,7 +534,7 @@ class LinkedInEasyApply:
                         btn.click()
                         _time.sleep(3)
                         break
-                except:
+                except Exception:
                     pass
 
             for signal in ["thank", "confirmation", "submitted"]:
@@ -558,7 +558,7 @@ class LinkedInEasyApply:
                 el = page.locator(sel).first
                 if el.is_visible(timeout=1500) and not el.input_value():
                     el.fill(CANDIDATE["phone"])
-            except: pass
+            except Exception: pass
 
         # City/Location
         for sel in ['input[id*="city"]', 'input[id*="location"]', 'input[placeholder*="city"]']:
@@ -566,7 +566,7 @@ class LinkedInEasyApply:
                 el = page.locator(sel).first
                 if el.is_visible(timeout=1500) and not el.input_value():
                     el.fill(CANDIDATE["city"])
-            except: pass
+            except Exception: pass
 
         # Years of experience (radio / select / input)
         for sel in ['select[id*="experience"]', 'input[id*="experience"]']:
@@ -578,7 +578,7 @@ class LinkedInEasyApply:
                         el.select_option(label="10")
                     elif not el.input_value():
                         el.fill("10")
-            except: pass
+            except Exception: pass
 
         # Boolean / Yes-No radio buttons (Did you work on X?)
         # La mayoría de preguntas Yes/No → responder "Yes" como default
@@ -589,14 +589,14 @@ class LinkedInEasyApply:
                 try:
                     label = page.locator(f'label[for="{radio.get_attribute("id")}"]')
                     label_text = label.text_content() or ""
-                except: pass
+                except Exception: pass
 
                 # Si es la primera opción (Yes/Sí) de un par, seleccionarla
                 if i % 2 == 0 and not radio.is_checked():
                     try:
                         radio.click(timeout=1000)
-                    except: pass
-        except: pass
+                    except Exception: pass
+        except Exception: pass
 
         # Textarea (cover letter, etc.) — solo llenar si está vacío
         try:
@@ -608,7 +608,7 @@ class LinkedInEasyApply:
                         f"With over {CANDIDATE['years_experience']} years of experience in project management "
                         f"and business analysis, I am confident I can bring immediate value to your team."
                     )
-        except: pass
+        except Exception: pass
 
     def _click_next_or_submit(self, page) -> str:
         """
@@ -629,7 +629,7 @@ class LinkedInEasyApply:
                     time.sleep(3)
                     print("   🎉 Solicitud enviada!")
                     return "submitted"
-            except: pass
+            except Exception: pass
 
         # Botón "Siguiente" / "Next"
         next_selectors = [
@@ -647,14 +647,14 @@ class LinkedInEasyApply:
                     btn.click()
                     time.sleep(1.5)
                     return "next"
-            except: pass
+            except Exception: pass
 
         # Botón Cerrar/Descartar → salimos
         try:
             btn = page.locator('button[aria-label*="Dismiss"]').first
             if btn.is_visible(timeout=1000):
                 return "error"
-        except: pass
+        except Exception: pass
 
         return "error"
 

@@ -40,7 +40,7 @@ def show_linkedin_jobs():
     # Get LinkedIn tab
     try:
         worksheet = spreadsheet.worksheet('LinkedIn')
-    except:
+    except Exception:
         print("❌ LinkedIn tab not found")
         return
     
@@ -51,32 +51,32 @@ def show_linkedin_jobs():
     # Find columns
     try:
         role_col = headers.index('Role')
-    except:
+    except Exception:
         role_col = 2
     
     try:
         company_col = headers.index('Company')
-    except:
+    except Exception:
         company_col = 1
     
     try:
         url_col = headers.index('ApplyURL')
-    except:
+    except Exception:
         url_col = 5
     
     try:
         fit_col = headers.index('FitScore')
-    except:
+    except Exception:
         fit_col = 15
     
     try:
         status_col = headers.index('Status')
-    except:
+    except Exception:
         status_col = 12
     
     try:
         source_col = headers.index('Source')
-    except:
+    except Exception:
         source_col = 6
     
     # Find jobs with FIT >= 7
@@ -111,7 +111,7 @@ def show_linkedin_jobs():
                     'easy_apply': is_easy_apply,
                     'source': source
                 })
-        except:
+        except Exception:
             continue
     
     # Print results

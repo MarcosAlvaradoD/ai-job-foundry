@@ -48,7 +48,7 @@ CV_DATA = {
     # Professional info
     "years_experience": "10",
     "current_role": "Senior Project Manager / Product Owner / Business Analyst",
-    "linkedin": "https://www.linkedin.com/in/marcos-alvarado",
+    "linkedin": "https://www.linkedin.com/in/marcosalvarado-it",
     "current_company": "Available immediately",
     
     # Skills
@@ -456,7 +456,7 @@ IMPORTANT:
                             print(f"      ✅ Clicked '{action}' button (Playwright locator)")
                             await asyncio.sleep(3)
                             continue
-                    except:
+                    except Exception:
                         # Fallback to OCR coordinates
                         target = ai_decision.get('target', {})
                         if target.get('x') and target.get('y'):
@@ -568,7 +568,7 @@ IMPORTANT:
                 if isinstance(fit_score, str):
                     try:
                         fit_score = int(fit_score)
-                    except:
+                    except Exception:
                         continue
                 
                 if fit_score >= min_fit:

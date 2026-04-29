@@ -36,7 +36,7 @@ def get_email_age_days(message):
             now = datetime.now(email_date.tzinfo)
             age = (now - email_date).days
             return age
-    except:
+    except Exception:
         return 999
     
     return 999

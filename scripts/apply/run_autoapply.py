@@ -96,7 +96,8 @@ def get_pending_apply_tasks() -> list[dict]:
 
 
 # ── Enhanced apply_to_job with real submit ────────────────────────────────────
-def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False) -> tuple[bool, str]:
+def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
+                             try_external: bool = False) -> tuple[bool, str]:
     """
     Extended version of apply_to_job that actually submits.
     submit=True: clicks Submit button after filling form
@@ -128,8 +129,45 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False) -> 
             # Try alternate selectors
             easy_apply = page.query_selector('[aria-label*="Easy Apply"]')
         if not easy_apply:
-            print("[SKIP] Not an Easy Apply job")
-            return False, "Not Easy Apply"
+            if try_external:
+                print("[EXT] No Easy Apply found — trying external site apply...")
+                # Detect if the job has an external apply URL (not linkedin.com)
+                ext_url = url
+                # Try to find the external "Apply" button href
+                ext_link = page.query_selector('a:has-text("Apply"):not(:has-text("Easy Apply"))')
+                if ext_link:
+                    href = ext_link.get_attribute("href")
+                    if href and "linkedin.com" not in href:
+                        ext_url = href
+                        print(f"[EXT] External URL found: {ext_url[:80]}")
+
+                # Run async external applier from sync context
+                from core.automation.auto_apply_external import ExternalApplier, detect_platform
+                platform = detect_platform(ext_url)
+                print(f"[EXT] Platform: {platform.upper()}")
+
+                # We need an async context — use asyncio.run() in a thread-safe way
+                from playwright.async_api import async_playwright as _async_pw
+                import asyncio
+
+                async def _do_external():
+                    ext_applier = ExternalApplier()
+                    async with _async_pw() as pw:
+                        browser2 = await pw.chromium.launch(headless=False)
+                        ctx2     = await browser2.new_context(viewport={"width": 1280, "height": 800})
+                        page2    = await ctx2.new_page()
+                        result   = await ext_applier.apply(page2, job, submit=submit)
+                        await browser2.close()
+                        return result
+
+                try:
+                    ok_ext, reason_ext = asyncio.run(_do_external())
+                    return ok_ext, reason_ext
+                except Exception as e:
+                    return False, f"External apply failed: {e}"
+            else:
+                print("[SKIP] Not an Easy Apply job (use --external to attempt external sites)")
+                return False, "Not Easy Apply"
 
         print("[FOUND] Easy Apply button")
 
@@ -226,12 +264,14 @@ def update_sheet_status(sheet_manager, job: dict, status: str, notes: str = ""):
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
     parser = argparse.ArgumentParser(description='LinkedIn Auto-Apply Production Runner')
-    parser.add_argument('--submit',   action='store_true', help='Actually submit applications')
-    parser.add_argument('--dry-run',  action='store_true', help='Simulate without submitting')
-    parser.add_argument('--headless', action='store_true', help='Run browser headless (no window)')
-    parser.add_argument('--max',      type=int, default=5,  help='Max applications (default: 5)')
-    parser.add_argument('--min-fit',  type=float, default=7.0, help='Min FIT score (default: 7)')
-    parser.add_argument('--job-id',   type=str, default='', help='Apply to specific LinkedIn job ID')
+    parser.add_argument('--submit',     action='store_true', help='Actually submit applications')
+    parser.add_argument('--dry-run',    action='store_true', help='Simulate without submitting')
+    parser.add_argument('--headless',   action='store_true', help='Run browser headless (no window)')
+    parser.add_argument('--max',        type=int, default=5,  help='Max applications (default: 5)')
+    parser.add_argument('--min-fit',    type=float, default=7.0, help='Min FIT score (default: 7)')
+    parser.add_argument('--job-id',     type=str, default='', help='Apply to specific LinkedIn job ID')
+    parser.add_argument('--no-confirm', action='store_true', help='Skip 5-second safety pause (for pipeline use)')
+    parser.add_argument('--external',   action='store_true', help='Also attempt external-site apply (Workday/Greenhouse/Lever/etc)')
     args = parser.parse_args()
 
     # Default to dry-run if neither specified
@@ -241,13 +281,16 @@ def main():
     print("=" * 70)
     print("LinkedIn Auto-Apply — Production Runner")
     mode_str = "SUBMIT (LIVE)" if args.submit else "DRY-RUN"
-    print(f"Mode: {mode_str} | Max: {args.max} | Min FIT: {args.min_fit} | Headless: {args.headless}")
+    ext_str  = " + External Sites" if args.external else " (Easy Apply only)"
+    print(f"Mode: {mode_str}{ext_str} | Max: {args.max} | Min FIT: {args.min_fit} | Headless: {args.headless}")
     print("=" * 70)
 
-    if args.submit:
+    if args.submit and not args.no_confirm:
         print("\n[WARNING] LIVE mode — applications will be SUBMITTED!")
         print("Press Ctrl+C within 5 seconds to cancel...")
         time.sleep(5)
+    elif args.submit and args.no_confirm:
+        print("\n[WARNING] LIVE mode — applications will be SUBMITTED (pipeline mode, no pause)")
 
     from core.automation.linkedin_auto_apply import LinkedInAutoApplyV3
     from playwright.sync_api import sync_playwright
@@ -318,7 +361,11 @@ def main():
         print("\n[OK] LinkedIn session active — starting applications...\n")
 
         for job in jobs_to_process:
-            ok, reason = apply_to_job_with_submit(applier, job, page, submit=args.submit)
+            ok, reason = apply_to_job_with_submit(
+                applier, job, page,
+                submit=args.submit,
+                try_external=getattr(args, 'external', False),
+            )
 
             if ok and args.submit:
                 results['applied'] += 1

@@ -100,8 +100,8 @@ def print_menu():
     print(f"\n{COLORS['BOLD']}📋 MENÚ PRINCIPAL:{COLORS['END']}\n")
     
     print(f"{COLORS['GREEN']}PIPELINE COMPLETO:{COLORS['END']}")
-    print("  1. 🚀 Ejecutar Pipeline Completo (emails + AI + expire + report)")
-    print("  2. ⚡ Pipeline Rápido (solo emails + report)")
+    print("  1. 🚀 Pipeline Completo AUTO (scrape→emails→fit→cartas→APPLY) ⭐")
+    print("  2. ⚡ Pipeline Rápido (emails + enrich + dedup + clean básico)")
     
     print(f"\n{COLORS['CYAN']}OPERACIONES INDIVIDUALES:{COLORS['END']}")
     print("  3. 📧 Procesar Emails Nuevos (reclutadores directos)")
@@ -112,12 +112,12 @@ def print_menu():
     print("  8. 📊 Generar Reporte")
     
     print(f"\n{COLORS['YELLOW']}SCRAPING:{COLORS['END']}")
-    print("  9. 🔗 LinkedIn Scraper (buscar ofertas)")
+    print("  9. 🔗 LinkedIn Scraper (Búsqueda Activa V3 + Notificaciones → Staging)")
     print("  10. 🔗 Indeed Scraper (buscar ofertas)")
     
     print(f"\n{COLORS['BLUE']}AUTO-APPLY:{COLORS['END']}")
-    print("  11. 🎯 Auto-Apply (DRY RUN - simulación)")
-    print("  12. 💼 Auto-Apply (LIVE - aplica realmente)")
+    print("  11. 🎯 Auto-Apply (DRY RUN - simulación)  [Easy Apply + Sitios Externos]")
+    print("  12. 💼 Auto-Apply (LIVE - aplica realmente) [Easy Apply + Workday/Greenhouse/Lever]")
     
     print(f"\n{COLORS['HEADER']}VISUALIZACIÓN:{COLORS['END']}")
     print("  13. 📊 Abrir Dashboard")
@@ -136,9 +136,22 @@ def print_menu():
     print("  24. 🔧 Ver Configuración (.env)")
     print("  25. 📚 Ver Documentación")
 
+    print(f"\n{COLORS['GREEN']}MANTENIMIENTO DEL SHEET:{COLORS['END']}")
+    print("  26. 🔧 Mantenimiento Completo (enrich + dedup + clean + fit)")
+    print("  27. 🏷️  Enriquecer Jobs Desconocidos (Company/Role via API)")
+    print("  28. 🗑️  Eliminar Duplicados del Sheet")
+    print("  29. 🚫 Limpiar Jobs Cerrados (no aceptan aplicaciones)")
+    print("  30. 🤖 Recalcular FIT Scores (solo nuevos)")
+
+    print(f"\n{COLORS['BLUE']}FLUJO DE APLICACION:{COLORS['END']}")
+    print("  31. 📋 Reporte Pre-Apply (ver qué está listo)")
+    print("  32. ✉️  Generar Cartas de Presentación (LiteLLM)")
+    print("  33. 🚀 Auto-Apply V2 (DRY RUN — nuevo runner)")
+    print("  34. 💼 Auto-Apply V2 (LIVE — aplica realmente)")
+
     print(f"\n{COLORS['RED']}SALIR:{COLORS['END']}")
     print("  0. 🚪 Salir")
-    
+
     print("\n" + "="*70)
 
 def run_command(command: list, description: str):
@@ -183,18 +196,102 @@ def handle_option(option: str):
     """Handle menu option"""
     
     if option == '1':
-        # Pipeline completo
-        return run_command(
+        # Pipeline completo end-to-end FULL AUTO:
+        #   0. LinkedIn Scraping V3 LIVE → Staging  (nuevos jobs del día)
+        #   1. Ingestion  — emails + AI + expire + report
+        #   2. Maintenance — enrich + dedup + clean_closed + fit_scores (tab LinkedIn)
+        #   3. Cover letters — genera cartas para jobs FIT>=8 sin carta
+        #   4. Readiness   — reporte: cuántos listos para aplicar
+        #   5. Auto-apply  — aplica a jobs FIT>=7 que ya están en tab LinkedIn
+        print(f"\n{COLORS['CYAN']}Pipeline completo AUTO (6 pasos){COLORS['END']}")
+        print(f"{COLORS['YELLOW']}Scraping → Emails → Mantenimiento → Cartas → Reporte → AUTO-APPLY{COLORS['END']}")
+
+        # Pedir parámetros antes de empezar (para no interrumpir el pipeline a mitad)
+        print(f"\n{COLORS['BOLD']}Configuración del Auto-Apply (paso 6/6):{COLORS['END']}")
+        min_fit_input = input(f"  FIT mínimo para aplicar [default=7]: ").strip()
+        min_fit = min_fit_input if min_fit_input else '7'
+        max_apps_input = input(f"  Máximo de aplicaciones [default=10]: ").strip()
+        max_apps = max_apps_input if max_apps_input else '10'
+
+        print(f"\n{COLORS['RED']}⚠️  El pipeline aplicará AUTOMÁTICAMENTE a hasta {max_apps} jobs con FIT>={min_fit}{COLORS['END']}")
+        confirm = input(f"{COLORS['BOLD']}¿Confirmar pipeline completo + auto-apply? (SI/S para confirmar): {COLORS['END']}").strip().upper()
+        if confirm not in ['SI', 'S', 'YES', 'Y']:
+            print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
+            return False
+
+        print(f"\n  [0/6] LinkedIn Scraping V3 (jobs nuevos → Staging)")
+        run_command(
+            ['py', 'core/ingestion/linkedin_search_scraper_v3.py', '--live'],
+            'LinkedIn Búsqueda Activa V3 (nuevos jobs → Staging)'
+        )
+        # No bloqueamos si falla el scraping — el pipeline puede continuar con jobs existentes
+
+        print(f"\n  [1/6] Emails + AI + Expire + Report")
+        ok1 = run_command(
             ['py', 'run_daily_pipeline.py', '--all'],
-            'Pipeline Completo (emails + AI + expire + report)'
+            'Ingestion (emails + AI + expire + report)'
         )
-    
+
+        print(f"\n  [2/6] Mantenimiento Sheet (enrich + dedup + clean_closed + fit_scores)")
+        ok2 = run_command(
+            ['py', 'scripts/maintenance/run_maintenance.py'],
+            'Mantenimiento (enrich + dedup + cerradas + FIT scores)'
+        )
+
+        print(f"\n  [3/6] Generando cartas de presentacion (FIT>=8, max 10)")
+        run_command(
+            ['py', 'scripts/apply/generate_cover_letters.py', '--min', '8', '--limit', '10'],
+            'Cover letters (FIT>=8, max 10 cartas nuevas)'
+        )
+
+        print(f"\n  [4/6] Reporte pre-apply")
+        run_command(
+            ['py', 'scripts/apply/check_apply_readiness.py', '--min', min_fit],
+            f'Reporte pre-apply (FIT >= {min_fit})'
+        )
+
+        print(f"\n  [5/6] Auto-Apply LIVE (FIT>={min_fit}, max {max_apps} jobs)")
+        print(f"  {COLORS['YELLOW']}Aplicando: Easy Apply + Workday / Greenhouse / Lever...{COLORS['END']}")
+        ok5 = run_command(
+            ['py', 'scripts/apply/run_autoapply.py',
+             '--submit', '--min-fit', min_fit, '--max', max_apps,
+             '--no-confirm', '--external'],
+            f'Auto-Apply LIVE (FIT>={min_fit}, max={max_apps}, Easy+External)'
+        )
+
+        print(f"\n{COLORS['GREEN']}{'='*60}{COLORS['END']}")
+        print(f"{COLORS['GREEN']}✅ Pipeline completo finalizado{COLORS['END']}")
+        print(f"  • Jobs nuevos scrapeados → Staging (revisar y promover a LinkedIn)")
+        print(f"  • FIT scores calculados para jobs en tab LinkedIn")
+        print(f"  • Auto-apply ejecutado para jobs con FIT>={min_fit}")
+        print(f"{COLORS['GREEN']}{'='*60}{COLORS['END']}")
+
+        return ok1 and ok2
+
     elif option == '2':
-        # Pipeline rápido
-        return run_command(
+        # Pipeline rapido: emails + mantenimiento basico (sin cartas ni apply)
+        print(f"\n{COLORS['CYAN']}Pipeline rapido (2 pasos){COLORS['END']}")
+
+        print(f"\n  [1/2] Emails + Report")
+        ok1 = run_command(
             ['py', 'run_daily_pipeline.py', '--emails', '--report'],
-            'Pipeline Rápido (emails + report)'
+            'Emails + Report'
         )
+
+        print(f"\n  [2/2] Mantenimiento rapido (enrich + dedup + clean, max 20 jobs)")
+        ok2 = run_command(
+            ['py', 'scripts/maintenance/run_maintenance.py', '--only', 'enrich'],
+            'Enrich jobs desconocidos'
+        )
+        run_command(
+            ['py', 'scripts/maintenance/run_maintenance.py', '--only', 'dedup'],
+            'Dedup'
+        )
+        run_command(
+            ['py', 'scripts/maintenance/run_maintenance.py', '--only', 'clean'],
+            'Limpiar cerradas (max 20)'
+        )
+        return ok1 and ok2
     
     elif option == '3':
         # Procesar emails
@@ -275,33 +372,51 @@ def handle_option(option: str):
         )
     
     elif option == '9':
-        # LinkedIn Notifications Scraper (NUEVO)
-        print(f"\n{COLORS['CYAN']}🔍 LinkedIn Notifications Scraper{COLORS['END']}")
-        print(f"Extrae ofertas de recomendaciones de LinkedIn")
-        print(f"\nOpciones:")
-        print(f"  1. Solo scraping (extrae y guarda)")
-        print(f"  2. Workflow completo DRY RUN (scrape + analyze + test apply)")
-        print(f"  3. Workflow completo LIVE (scrape + analyze + REAL apply)")
-        
-        choice = input(f"\n{COLORS['BOLD']}Selecciona [1/2/3]: {COLORS['END']}").strip()
-        
+        # LinkedIn Scraper — dos modos: búsqueda activa V3 o notificaciones
+        print(f"\n{COLORS['CYAN']}🔍 LinkedIn Scraper{COLORS['END']}")
+        print(f"\n{COLORS['BOLD']}Modo:{COLORS['END']}")
+        print(f"  {COLORS['GREEN']}1. 🚀 Búsqueda Activa V3 (DRY RUN){COLORS['END']}  — nuevas keywords ERP/SAP/PM → pestaña Staging")
+        print(f"  {COLORS['GREEN']}2. 💼 Búsqueda Activa V3 (LIVE){COLORS['END']}     — guarda en pestaña Staging del Sheet")
+        print(f"  {COLORS['CYAN']}3. 📩 Notificaciones Scraper (solo extracción){COLORS['END']}")
+        print(f"  {COLORS['CYAN']}4. 📩 Notificaciones Workflow completo (DRY RUN){COLORS['END']}")
+        print(f"  {COLORS['CYAN']}5. 📩 Notificaciones Workflow completo (LIVE){COLORS['END']}")
+
+        choice = input(f"\n{COLORS['BOLD']}Selecciona [1-5]: {COLORS['END']}").strip()
+
         if choice == '1':
             return run_command(
-                ['py', 'run_linkedin_workflow.py', '--scrape-only'],
-                '🔍 LinkedIn Notifications Scraper (solo extracción)'
+                ['py', 'core/ingestion/linkedin_search_scraper_v3.py', '--dry-run'],
+                '🔍 LinkedIn Búsqueda Activa V3 (DRY RUN)'
             )
         elif choice == '2':
+            print(f"\n{COLORS['YELLOW']}Jobs nuevos se guardarán en pestaña 'Staging' del Sheet.{COLORS['END']}")
+            print(f"Revísalos ahí y mueve los buenos a 'LinkedIn' para que entren al pipeline.")
+            confirm = input(f"\n{COLORS['BOLD']}¿Continuar? (S/n): {COLORS['END']}").strip().upper()
+            if confirm in ['S', 'SI', 'YES', 'Y', '']:
+                return run_command(
+                    ['py', 'core/ingestion/linkedin_search_scraper_v3.py', '--live'],
+                    '💼 LinkedIn Búsqueda Activa V3 (LIVE → Staging)'
+                )
+            else:
+                print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
+                return False
+        elif choice == '3':
+            return run_command(
+                ['py', 'run_linkedin_workflow.py', '--scrape-only'],
+                '📩 LinkedIn Notifications Scraper (solo extracción)'
+            )
+        elif choice == '4':
             return run_command(
                 ['py', 'run_linkedin_workflow.py', '--all'],
-                '🚀 LinkedIn Workflow Completo (DRY RUN)'
+                '📩 LinkedIn Notifications Workflow Completo (DRY RUN)'
             )
-        elif choice == '3':
+        elif choice == '5':
             print(f"\n{COLORS['RED']}⚠️  MODO LIVE - Aplicará a ofertas reales{COLORS['END']}")
-            confirm = input(f"{COLORS['BOLD']}¿Estás seguro? (escribe 'SÍ' o 'SI' o 'S' para confirmar): {COLORS['END']}").strip().upper()
+            confirm = input(f"{COLORS['BOLD']}¿Estás seguro? (escribe 'SI' o 'S' para confirmar): {COLORS['END']}").strip().upper()
             if confirm in ['SÍ', 'SI', 'S', 'YES', 'Y']:
                 return run_command(
                     ['py', 'run_linkedin_workflow.py', '--all', '--live'],
-                    '🚀 LinkedIn Workflow Completo (LIVE)'
+                    '📩 LinkedIn Notifications Workflow Completo (LIVE)'
                 )
             else:
                 print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
@@ -317,44 +432,43 @@ def handle_option(option: str):
         return False
     
     elif option == '11':
-        # Auto-Apply DRY RUN (EASY APPLY COMPLETE)
-        print(f"\n{COLORS['CYAN']}🤖 Auto-Apply EASY APPLY (DRY RUN){COLORS['END']}")
-        print(f"Sistema: Playwright + Detección Inteligente Easy Apply")
-        print(f"Detecta: Easy Apply vs External Apply\n")
-        
-        # Ask for parameters
+        # Auto-Apply DRY RUN — Easy Apply + External Sites
+        print(f"\n{COLORS['CYAN']}🤖 Auto-Apply DRY RUN{COLORS['END']}")
+        print(f"Cubre: LinkedIn Easy Apply + Workday / Greenhouse / Lever / SmartRecruiters")
+        print(f"Usa IA local (LM Studio) para preguntas personalizadas\n")
+
         min_fit = input(f"{COLORS['BOLD']}FIT Score mínimo [default=7]: {COLORS['END']}").strip()
         min_fit = min_fit if min_fit else '7'
-        
-        max_jobs = input(f"{COLORS['BOLD']}Máximo de jobs a procesar [default=5]: {COLORS['END']}").strip()
+        max_jobs = input(f"{COLORS['BOLD']}Máximo de jobs [default=5]: {COLORS['END']}").strip()
         max_jobs = max_jobs if max_jobs else '5'
-        
+        ext = input(f"{COLORS['BOLD']}¿Incluir sitios externos? Workday/Greenhouse/etc (S/n): {COLORS['END']}").strip().upper()
+        ext_flag = ['--external'] if ext not in ['N', 'NO'] else []
+
         return run_command(
-            ['py', 'core/automation/auto_apply_linkedin_easy_complete.py', 
-             '--min-fit', min_fit, '--max-jobs', max_jobs],
-            f'Easy Apply (DRY RUN - FIT>={min_fit}, max={max_jobs})'
+            ['py', 'scripts/apply/run_autoapply.py', '--dry-run',
+             '--min-fit', min_fit, '--max', max_jobs] + ext_flag,
+            f'Auto-Apply DRY RUN (FIT>={min_fit}, max={max_jobs})'
         )
-    
+
     elif option == '12':
-        # Auto-Apply LIVE (EASY APPLY COMPLETE)
-        print(f"\n{COLORS['RED']}⚠️  MODO LIVE - Aplicará a ofertas reales{COLORS['END']}")
-        print(f"Sistema: Playwright + Detección Inteligente Easy Apply")
-        print(f"Detecta: Easy Apply vs External Apply\n")
-        
-        # Ask for parameters
+        # Auto-Apply LIVE — Easy Apply + External Sites
+        print(f"\n{COLORS['RED']}⚠️  MODO LIVE — Se enviarán aplicaciones REALES{COLORS['END']}")
+        print(f"Cubre: LinkedIn Easy Apply + Workday / Greenhouse / Lever / SmartRecruiters")
+        print(f"Usa IA local (LM Studio) para preguntas personalizadas\n")
+
         min_fit = input(f"{COLORS['BOLD']}FIT Score mínimo [default=7]: {COLORS['END']}").strip()
         min_fit = min_fit if min_fit else '7'
-        
-        max_jobs = input(f"{COLORS['BOLD']}Máximo de jobs a procesar [default=5]: {COLORS['END']}").strip()
+        max_jobs = input(f"{COLORS['BOLD']}Máximo de jobs [default=5]: {COLORS['END']}").strip()
         max_jobs = max_jobs if max_jobs else '5'
-        
-        confirm = input(f"\n{COLORS['RED']}{COLORS['BOLD']}¿Aplicar REALMENTE a hasta {max_jobs} ofertas? (escribe 'SÍ' o 'SI' o 'S'): {COLORS['END']}").strip().upper()
-        
+        ext = input(f"{COLORS['BOLD']}¿Incluir sitios externos? Workday/Greenhouse/etc (S/n): {COLORS['END']}").strip().upper()
+        ext_flag = ['--external'] if ext not in ['N', 'NO'] else []
+
+        confirm = input(f"\n{COLORS['RED']}{COLORS['BOLD']}¿Aplicar REALMENTE a hasta {max_jobs} ofertas? (SI/S): {COLORS['END']}").strip().upper()
         if confirm in ['SÍ', 'SI', 'S', 'YES', 'Y']:
             return run_command(
-                ['py', 'core/automation/auto_apply_linkedin_easy_complete.py', 
-                 '--live', '--min-fit', min_fit, '--max-jobs', max_jobs],
-                f'Easy Apply (LIVE - FIT>={min_fit}, max={max_jobs})'
+                ['py', 'scripts/apply/run_autoapply.py', '--submit',
+                 '--min-fit', min_fit, '--max', max_jobs] + ext_flag,
+                f'Auto-Apply LIVE (FIT>={min_fit}, max={max_jobs})'
             )
         else:
             print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
@@ -541,6 +655,131 @@ def handle_option(option: str):
 
         return True
     
+    # ── MANTENIMIENTO DEL SHEET ───────────────────────────────────────────────
+
+    elif option == '26':
+        # Mantenimiento completo
+        print(f"\n{COLORS['CYAN']}Modo:{COLORS['END']}")
+        print("  1. Normal (limita clean a 30 jobs — rapido)")
+        print("  2. Deep (sin limite — completo, tarda mas)")
+        print("  3. Dry-run (preview sin cambios)")
+        m = input(f"\n{COLORS['BOLD']}Selecciona [1/2/3, default=1]: {COLORS['END']}").strip()
+        extra = []
+        if m == '2':
+            extra = ['--deep']
+        elif m == '3':
+            extra = ['--dry-run']
+        return run_command(
+            ['py', 'scripts/maintenance/run_maintenance.py'] + extra,
+            'Mantenimiento completo (enrich + dedup + clean_closed + fit_scores)'
+        )
+
+    elif option == '27':
+        # Enriquecer jobs desconocidos
+        limit = input(f"{COLORS['BOLD']}Limite de jobs a enriquecer [default=50]: {COLORS['END']}").strip()
+        limit = limit if limit else '50'
+        return run_command(
+            ['py', 'scripts/maintenance/enrich_unknown_jobs.py', '--limit', limit],
+            f'Enriqueciendo Company/Role para jobs desconocidos (max {limit})'
+        )
+
+    elif option == '28':
+        # Eliminar duplicados
+        print(f"\n{COLORS['CYAN']}Modo:{COLORS['END']}")
+        print("  1. Delete (elimina filas duplicadas — default)")
+        print("  2. Dry-run (preview sin cambios)")
+        m = input(f"\n{COLORS['BOLD']}Selecciona [1/2, default=1]: {COLORS['END']}").strip()
+        extra = ['--dry-run'] if m == '2' else []
+        return run_command(
+            ['py', 'scripts/maintenance/deduplicate_linkedin_sheet.py'] + extra,
+            'Eliminando filas duplicadas del Sheet'
+        )
+
+    elif option == '29':
+        # Limpiar jobs cerrados
+        print(f"\n{COLORS['CYAN']}Modo:{COLORS['END']}")
+        print("  1. Delete (elimina jobs cerrados — default)")
+        print("  2. Mark (marca como Skip-Closed, no elimina)")
+        print("  3. Dry-run (preview sin cambios)")
+        m = input(f"\n{COLORS['BOLD']}Selecciona [1/2/3, default=1]: {COLORS['END']}").strip()
+        limit = input(f"{COLORS['BOLD']}Limite de jobs a verificar [default=30, 0=todos]: {COLORS['END']}").strip()
+        limit = limit if limit else '30'
+        extra = []
+        if m == '2':
+            extra = ['--mark']
+        elif m == '3':
+            extra = ['--dry-run']
+        if limit != '0':
+            extra += ['--limit', limit]
+        return run_command(
+            ['py', 'scripts/maintenance/clean_closed_jobs.py'] + extra,
+            f'Limpiando jobs cerrados (verificando max {limit})'
+        )
+
+    elif option == '30':
+        # Recalcular FIT scores
+        return run_command(
+            ['py', 'scripts/maintenance/calculate_linkedin_fit_scores.py'],
+            'Calculando FIT scores para jobs sin analizar'
+        )
+
+    # ── FLUJO DE APLICACION ───────────────────────────────────────────────────
+
+    elif option == '31':
+        # Reporte pre-apply
+        min_fit = input(f"{COLORS['BOLD']}FIT minimo [default=7]: {COLORS['END']}").strip()
+        min_fit = min_fit if min_fit else '7'
+        show = input(f"{COLORS['BOLD']}Mostrar lista de jobs READY? (s/N): {COLORS['END']}").strip().lower()
+        extra = ['--show-ready'] if show == 's' else []
+        return run_command(
+            ['py', 'scripts/apply/check_apply_readiness.py', '--min', min_fit] + extra,
+            f'Reporte de readiness (FIT >= {min_fit})'
+        )
+
+    elif option == '32':
+        # Generar cartas de presentacion
+        min_fit = input(f"{COLORS['BOLD']}FIT minimo para generar carta [default=8]: {COLORS['END']}").strip()
+        min_fit = min_fit if min_fit else '8'
+        limit = input(f"{COLORS['BOLD']}Max cartas a generar [default=10]: {COLORS['END']}").strip()
+        limit = limit if limit else '10'
+        dry = input(f"{COLORS['BOLD']}Dry-run (preview sin guardar)? (s/N): {COLORS['END']}").strip().lower()
+        extra = ['--dry-run'] if dry == 's' else []
+        return run_command(
+            ['py', 'scripts/apply/generate_cover_letters.py',
+             '--min', min_fit, '--limit', limit] + extra,
+            f'Generando cartas de presentacion (FIT >= {min_fit}, max {limit})'
+        )
+
+    elif option == '33':
+        # Auto-Apply V2 DRY RUN
+        min_fit = input(f"{COLORS['BOLD']}FIT minimo [default=7]: {COLORS['END']}").strip()
+        min_fit = min_fit if min_fit else '7'
+        max_apps = input(f"{COLORS['BOLD']}Max aplicaciones [default=5]: {COLORS['END']}").strip()
+        max_apps = max_apps if max_apps else '5'
+        return run_command(
+            ['py', 'scripts/apply/run_autoapply.py',
+             '--dry-run', '--min-fit', min_fit, '--max', max_apps],
+            f'Auto-Apply V2 DRY-RUN (FIT>={min_fit}, max={max_apps})'
+        )
+
+    elif option == '34':
+        # Auto-Apply V2 LIVE
+        print(f"\n{COLORS['RED']}⚠️  MODO LIVE — Se enviarán aplicaciones REALES a LinkedIn{COLORS['END']}")
+        min_fit = input(f"{COLORS['BOLD']}FIT minimo [default=7]: {COLORS['END']}").strip()
+        min_fit = min_fit if min_fit else '7'
+        max_apps = input(f"{COLORS['BOLD']}Max aplicaciones [default=5]: {COLORS['END']}").strip()
+        max_apps = max_apps if max_apps else '5'
+        confirm = input(f"\n{COLORS['RED']}{COLORS['BOLD']}¿Aplicar REALMENTE a hasta {max_apps} jobs? (escribe SI): {COLORS['END']}").strip().upper()
+        if confirm in ['SI', 'S', 'YES', 'Y']:
+            return run_command(
+                ['py', 'scripts/apply/run_autoapply.py',
+                 '--submit', '--min-fit', min_fit, '--max', max_apps],
+                f'Auto-Apply V2 LIVE (FIT>={min_fit}, max={max_apps})'
+            )
+        else:
+            print(f"{COLORS['YELLOW']}Cancelado{COLORS['END']}")
+            return False
+
     elif option == '0':
         # Salir
         print(f"\n{COLORS['GREEN']}👋 ¡Hasta luego!{COLORS['END']}\n")
@@ -568,7 +807,7 @@ def main():
         print_menu()
         
         try:
-            option = input(f"{COLORS['BOLD']}Selecciona una opción [0-20]: {COLORS['END']}").strip()
+            option = input(f"{COLORS['BOLD']}Selecciona una opción [0-34]: {COLORS['END']}").strip()
             
             result = handle_option(option)
             

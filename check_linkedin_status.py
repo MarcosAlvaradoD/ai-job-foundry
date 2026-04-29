@@ -43,7 +43,7 @@ def main():
             fit_score = float(job.get('FitScore', 0))
             if fit_score > 0:
                 fit_scores.append(fit_score)
-        except:
+        except Exception:
             fit_score = 0
         
         # Easy Apply

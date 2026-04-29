@@ -117,7 +117,7 @@ class JobCleaner:
             try:
                 created_date = datetime.fromisoformat(created_at.split()[0])
                 days_old = (datetime.now() - created_date).days
-            except:
+            except Exception:
                 days_old = 0
             
             # Verificar blacklist
@@ -244,18 +244,27 @@ class JobCleaner:
                 if job['url']:
                     self._add_to_blacklist(job['url'], f"Deleted: {job['status']}")
                 
-                # TODO: Implementar borrado real de Google Sheets
-                # self.sheet_manager.delete_job(job['row_id'])
+                # Mark as DELETED in sheet (no row deletion API to avoid row shifts)
+                row_id = job.get('row_id', 0)
+                if row_id and row_id >= 2:
+                    self.sheet_manager.update_job(
+                        row_id=row_id,
+                        updates={'Status': 'DELETED'},
+                        tab='linkedin',
+                    )
                 print(f"   ✅ {job['company']} - {job['role']}")
         
         # Marcar jobs
         if to_mark:
             print(f"\n⏰ Marcando {len(to_mark)} jobs para borrar...")
             for job in to_mark:
-                # TODO: Actualizar status en Sheets
-                # self.sheet_manager.update_job(job['row_id'], {
-                #     'Status': f"Marked for deletion ({job['days_remaining']}d)"
-                # })
+                row_id = job.get('row_id', 0)
+                if row_id and row_id >= 2:
+                    self.sheet_manager.update_job(
+                        row_id=row_id,
+                        updates={'Status': f"Marked for deletion ({job.get('days_remaining', '?')}d)"},
+                        tab='linkedin',
+                    )
                 print(f"   ✅ {job['company']} - {job['role']}")
         
         print("\n✅ Limpieza completada\n")
@@ -290,12 +299,11 @@ class JobCleaner:
                 fit = int(job.get('FitScore', 0))
                 if fit > 0:
                     fit_scores.append(fit)
-            except:
+            except Exception:
                 pass
         
         avg_fit = sum(fit_scores) / len(fit_scores) if fit_scores else 0
-        
-        # TODO: Actualizar pestaña Resumen en Sheets
+
         stats = {
             'ultima_actualizacion': datetime.now().isoformat(),
             'ofertas_analizadas': total_jobs,
@@ -303,12 +311,34 @@ class JobCleaner:
             'por_status': by_status,
             'fit_promedio': round(avg_fit, 1)
         }
-        
+
+        # Write summary row to Resumen tab if it exists
+        try:
+            import json as _json
+            resumen_row = {
+                'Fecha': datetime.now().strftime('%Y-%m-%d %H:%M'),
+                'Total': str(total_jobs),
+                'FIT_Promedio': str(round(avg_fit, 1)),
+                'Por_Fuente': _json.dumps(by_source, ensure_ascii=False),
+                'Por_Status': _json.dumps(by_status, ensure_ascii=False),
+            }
+            resumen_jobs = self.sheet_manager.get_all_jobs(tab='resumen')
+            # Append as row 2 + len (row index after headers)
+            next_row = len(resumen_jobs) + 2
+            self.sheet_manager.update_job(
+                row_id=next_row,
+                updates=resumen_row,
+                tab='resumen',
+            )
+            print("   Resumen actualizado en Google Sheets")
+        except Exception as e:
+            print(f"   ⚠️  No se pudo actualizar Resumen: {e}")
+
         print(f"✅ Estadísticas calculadas:")
         print(f"   Total: {total_jobs}")
         print(f"   FIT Promedio: {avg_fit:.1f}")
         print()
-        
+
         return stats
 
 def main():

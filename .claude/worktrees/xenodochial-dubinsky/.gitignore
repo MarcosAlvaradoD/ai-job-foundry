@@ -1,0 +1,127 @@
+# ========================================
+# AI JOB FOUNDRY - GITIGNORE
+# ========================================
+
+# ========================================
+# CREDENTIALS - NEVER UPLOAD TO GITHUB
+# ========================================
+# Google OAuth
+data/credentials/*.json
+data/credentials/credentials.json
+data/credentials/token.json
+workflows/google_credentials.json
+workflows/token.json
+**/credentials.json
+**/token.json
+*.json.old
+
+# Environment files
+.env
+.env.local
+.env.production
+*.env
+
+# API Keys
+*.key
+*.secret
+**/api_keys.txt
+
+# ========================================
+# SESSION & PERSONAL DATA
+# ========================================
+# LinkedIn session data
+data/linkedin_cookies.json
+data/browser_data/
+data/browser_data_indeed/
+
+# State tracking files
+data/state/*.json
+state/*.json
+data/state/seen_ids.json
+data/state/processed_bulletins.txt
+
+# Personal data
+data/cv_descriptor.txt
+data/cover_letters/
+data/marcos_*.txt
+data/job_applications.json
+data/applications/
+data/interviews/
+data/interview_logs/
+
+# ========================================
+# LOGS & DEBUG FILES
+# ========================================
+logs/
+logs/**/*.log
+logs/powershell/*.log
+*.log
+ingest.log
+
+# Playwright debug artifacts
+**/debug_*.html
+**/screenshot_*.png
+
+# ========================================
+# PYTHON
+# ========================================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+venv/
+env/
+*.so
+
+# ========================================
+# NODE / JAVASCRIPT
+# ========================================
+node_modules/
+package-lock.json
+yarn.lock
+
+# ========================================
+# IDE & EDITORS
+# ========================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+.vs/
+
+# ========================================
+# OPERATING SYSTEM
+# ========================================
+.DS_Store
+Thumbs.db
+desktop.ini
+*.lnk
+
+# ========================================
+# TEMPORARY FILES
+# ========================================
+*.tmp
+*.bak
+*.backup
+*_BACKUP/
+*_ARCHIVE/
+*_OLD/
+temp/
+tmp/
+
+# ========================================
+# PROJECT SPECIFIC
+# ========================================
+# Dashboards with embedded API keys
+web/dashboard.html
+
+# MCP servers (if using submodules)
+mcp-servers/
+
+# Raw scraped data
+data/raw_jobs/

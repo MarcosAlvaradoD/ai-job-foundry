@@ -1,0 +1,84 @@
+name: Daily LinkedIn Scraper
+
+on:
+  # Corre L-V a las 10:00am hora Ciudad de México (CDT = UTC-6 → 16:00 UTC)
+  schedule:
+    - cron: '0 16 * * 1-5'
+
+  # También permite correrlo manualmente desde GitHub UI
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: 'dry-run o live'
+        required: false
+        default: 'live'
+
+env:
+  GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
+  LINKEDIN_EMAIL:   ${{ secrets.LINKEDIN_EMAIL }}
+  PROJECT_ROOT:     ${{ github.workspace }}
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      # ── 1. Checkout ──────────────────────────────────────────────────────────
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      # ── 2. Python ────────────────────────────────────────────────────────────
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+          cache-dependency-path: requirements_ci.txt
+
+      # ── 3. Dependencias ──────────────────────────────────────────────────────
+      - name: Install Python dependencies
+        run: pip install -r requirements_ci.txt
+
+      - name: Install Playwright browsers (Firefox only)
+        run: python -m playwright install firefox --with-deps
+
+      # ── 4. Restaurar credenciales desde Secrets ──────────────────────────────
+      - name: Write LinkedIn auth session
+        run: |
+          mkdir -p data/credentials
+          echo '${{ secrets.LINKEDIN_AUTH_JSON }}' > data/credentials/linkedin_auth.json
+
+      - name: Write Google Sheets credentials
+        run: |
+          echo '${{ secrets.GOOGLE_CREDENTIALS_JSON }}' > data/credentials/credentials.json
+
+      - name: Write Google OAuth token
+        run: |
+          echo '${{ secrets.GOOGLE_TOKEN_JSON }}' > data/credentials/token.json
+
+      # ── 5. Correr el scraper ─────────────────────────────────────────────────
+      - name: Run LinkedIn scraper (LIVE → Staging)
+        run: python scripts/ci/run_scraper_ci.py
+        env:
+          SCRAPER_MODE: ${{ github.event.inputs.mode || 'live' }}
+          DISPLAY: ':99'   # needed for some Playwright configurations
+
+      # ── 6. Limpiar credenciales del runner (seguridad) ───────────────────────
+      - name: Cleanup credentials
+        if: always()
+        run: |
+          rm -f data/credentials/linkedin_auth.json
+          rm -f data/credentials/credentials.json
+          rm -f data/credentials/token.json
+          echo "Credentials cleaned from runner"
+
+      # ── 7. Subir log como artifact (para diagnóstico) ────────────────────────
+      - name: Upload scraper log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: scraper-log-${{ github.run_number }}
+          path: logs/scraper_*.log
+          retention-days: 7
+          if-no-files-found: ignore

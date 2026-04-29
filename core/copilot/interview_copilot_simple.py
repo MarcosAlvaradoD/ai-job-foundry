@@ -86,7 +86,7 @@ class InterviewCopilot:
                 try:
                     data = stream.read(CHUNK, exception_on_overflow=False)
                     self.audio_frames.append(data)
-                except:
+                except Exception:
                     break
             
             stream.stop_stream()
@@ -156,7 +156,7 @@ class InterviewCopilot:
             # Limpiar archivo temporal
             try:
                 Path(audio_file).unlink()
-            except:
+            except Exception:
                 pass
     
     def transcribe_audio(self, audio_file):
@@ -535,7 +535,7 @@ if __name__ == "__main__":
                 ai_available = True
                 working_ip = ip
                 break
-        except:
+        except Exception:
             continue
     
     if not ai_available:

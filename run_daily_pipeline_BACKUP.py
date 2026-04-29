@@ -149,7 +149,7 @@ def check_expired_jobs():
                     row_index = job.get('row_index')
                     if row_index:
                         sheet_manager.update_job_status(row_index, 'Expired')
-            except:
+            except Exception:
                 continue
         
         if expired_count > 0:
@@ -170,7 +170,7 @@ def check_expired_jobs():
                 try:
                     if int(fit_score) >= 7:
                         jobs_to_verify.append(job)
-                except:
+                except Exception:
                     pass
         
         if jobs_to_verify:
@@ -236,7 +236,7 @@ def generate_report():
             try:
                 if int(fit_score) >= 7:
                     stats['high_fit'] += 1
-            except:
+            except Exception:
                 pass
         
         # Print report

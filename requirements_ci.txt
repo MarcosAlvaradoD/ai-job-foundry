@@ -1,0 +1,22 @@
+# Requirements mínimos para el scraper en GitHub Actions CI
+# Solo lo que necesita linkedin_search_scraper_v3.py + sheet_manager.py
+
+# Browser automation
+playwright==1.40.0
+
+# HTTP
+requests==2.31.0
+beautifulsoup4==4.12.2
+lxml==4.9.3
+
+# Google Sheets
+gspread==5.12.0
+google-auth==2.23.4
+google-auth-oauthlib==1.1.0
+google-auth-httplib2==0.1.1
+google-api-python-client==2.108.0
+
+# Config
+python-dotenv==1.0.0
+python-dateutil==2.8.2
+pytz==2023.3

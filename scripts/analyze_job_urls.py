@@ -89,7 +89,7 @@ class URLJobAnalyzer:
                             title = title.strip()
                             if title and len(title) > 3:
                                 break
-                    except:
+                    except Exception:
                         continue
                 
                 # Extract company
@@ -107,7 +107,7 @@ class URLJobAnalyzer:
                             company = company.strip()
                             if company and len(company) > 2:
                                 break
-                    except:
+                    except Exception:
                         continue
                 
                 # Extract location
@@ -126,7 +126,7 @@ class URLJobAnalyzer:
                             location = location.strip()
                             if location and len(location) > 2:
                                 break
-                    except:
+                    except Exception:
                         continue
                 
                 await browser.close()

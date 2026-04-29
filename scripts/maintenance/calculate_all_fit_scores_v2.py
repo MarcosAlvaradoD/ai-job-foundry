@@ -109,37 +109,37 @@ def calculate_all_fit_scores():
             # Find columns
             try:
                 role_col = headers.index('Role')
-            except:
+            except Exception:
                 role_col = 2  # Column C
             
             try:
                 company_col = headers.index('Company')
-            except:
+            except Exception:
                 company_col = 1  # Column B
             
             try:
                 url_col = headers.index('ApplyURL')
-            except:
+            except Exception:
                 url_col = 5  # Column F
             
             try:
                 fit_col = headers.index('FitScore')
-            except:
+            except Exception:
                 fit_col = 15  # Column P (Glassdoor format)
             
             try:
                 why_col = headers.index('Why')
-            except:
+            except Exception:
                 why_col = 16  # Column Q
             
             try:
                 seniority_col = headers.index('Seniority')
-            except:
+            except Exception:
                 seniority_col = 10  # Column K
             
             try:
                 notes_col = headers.index('Notes')
-            except:
+            except Exception:
                 notes_col = 14  # Column O
             
             analyzed_count = 0

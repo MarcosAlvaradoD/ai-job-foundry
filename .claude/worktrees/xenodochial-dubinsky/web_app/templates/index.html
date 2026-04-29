@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Job Foundry - Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Alpine.js -->
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-100" x-data="app()" x-init="init()">
+    
+    <!-- Navigation -->
+    <nav class="bg-blue-600 text-white shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <div class="flex justify-between items-center">
+                <div class="flex items-center space-x-3">
+                    <svg class="w-8 h-8" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                              d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                    <h1 class="text-2xl font-bold">AI Job Foundry</h1>
+                </div>
+                
+                <div class="flex items-center space-x-4">
+                    <span class="text-sm" x-text="'Last updated: ' + lastUpdate"></span>
+                    <button @click="refreshData()" 
+                            class="bg-blue-700 hover:bg-blue-800 px-4 py-2 rounded-lg transition">
+                        Refresh
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- Main Content -->
+    <div class="container mx-auto px-4 py-8">
+        
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <!-- Total Jobs -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Total Jobs</p>
+                        <p class="text-3xl font-bold" x-text="stats.total || 0"></p>
+                    </div>
+                    <div class="bg-blue-100 p-3 rounded-full">
+                        <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M21 13.255A23.931 23.931 0 0112 15c-3.183 0-6.22-.62-9-1.745M16 6V4a2 2 0 00-2-2h-4a2 2 0 00-2 2v2m4 6h.01M5 20h14a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- High Fit Jobs -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">High Fit (7+)</p>
+                        <p class="text-3xl font-bold text-green-600" x-text="stats.high_fit || 0"></p>
+                    </div>
+                    <div class="bg-green-100 p-3 rounded-full">
+                        <svg class="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- With URLs -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">With URLs</p>
+                        <p class="text-3xl font-bold text-purple-600" x-text="stats.with_urls || 0"></p>
+                    </div>
+                    <div class="bg-purple-100 p-3 rounded-full">
+                        <svg class="w-8 h-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Average FIT -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-500 text-sm">Avg FIT Score</p>
+                        <p class="text-3xl font-bold text-orange-600" x-text="(stats.avg_fit || 0) + '/10'"></p>
+                    </div>
+                    <div class="bg-orange-100 p-3 rounded-full">
+                        <svg class="w-8 h-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
+                                  d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
+                        </svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Control Center & Charts -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            
+            <!-- Control Center -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold mb-4">Control Center</h2>
+                
+                <div class="space-y-3">
+                    <!-- Pipeline -->
+                    <button @click="runCommand('pipeline_full')" 
+                            class="w-full bg-blue-600 hover:bg-blue-700 text-white px-4 py-3 rounded-lg transition flex items-center justify-between">
+                        <span>Run Full Pipeline</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14 5l7 7m0 0l-7 7m7-7H3" />
+                        </svg>
+                    </button>
+                    
+                    <button @click="runCommand('process_emails')" 
+                            class="w-full bg-green-600 hover:bg-green-700 text-white px-4 py-3 rounded-lg transition flex items-center justify-between">
+                        <span>Process Emails</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                    </button>
+                    
+                    <button @click="runCommand('linkedin_scrape')" 
+                            class="w-full bg-purple-600 hover:bg-purple-700 text-white px-4 py-3 rounded-lg transition flex items-center justify-between">
+                        <span>LinkedIn Scraper</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    </button>
+                    
+                    <button @click="runCommand('verify_urls')" 
+                            class="w-full bg-orange-600 hover:bg-orange-700 text-white px-4 py-3 rounded-lg transition flex items-center justify-between">
+                        <span>Verify URLs (High FIT)</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                    </button>
+                    
+                    <button @click="runCommand('standardize_status')" 
+                            class="w-full bg-gray-600 hover:bg-gray-700 text-white px-4 py-3 rounded-lg transition flex items-center justify-between">
+                        <span>Standardize Status</span>
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    </button>
+                </div>
+                
+                <!-- Command Output -->
+                <div x-show="commandOutput" x-cloak 
+                     class="mt-4 p-4 bg-gray-100 rounded-lg">
+                    <p class="text-sm font-mono" x-text="commandOutput"></p>
+                </div>
+            </div>
+            
+            <!-- Jobs Chart -->
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h2 class="text-xl font-bold mb-4">Jobs by Status</h2>
+                <div style="position: relative; height: 300px;">
+                    <canvas id="statusChart"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Recent Jobs Table -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <h2 class="text-xl font-bold mb-4">Recent Jobs</h2>
+            
+            <div class="overflow-x-auto">
+                <table class="min-w-full">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Company</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Role</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">FIT</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Source</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-200">
+                        <template x-for="job in jobs.slice(0, 10)" :key="job.CreatedAt">
+                            <tr class="hover:bg-gray-50">
+                                <td class="px-6 py-4 text-sm" x-text="job.Company"></td>
+                                <td class="px-6 py-4 text-sm" x-text="job.Role"></td>
+                                <td class="px-6 py-4 text-sm">
+                                    <span :class="getFitBadgeClass(job.FitScore)" x-text="job.FitScore + '/10'"></span>
+                                </td>
+                                <td class="px-6 py-4 text-sm">
+                                    <span :class="getStatusBadgeClass(job.Status)" x-text="job.Status"></span>
+                                </td>
+                                <td class="px-6 py-4 text-sm text-gray-500" x-text="job.Source"></td>
+                                <td class="px-6 py-4 text-sm">
+                                    <a x-show="job.ApplyURL" :href="job.ApplyURL" target="_blank"
+                                       class="text-blue-600 hover:text-blue-800">View</a>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        
+        <!-- System Status -->
+        <div class="bg-white rounded-lg shadow-lg p-6">
+            <h2 class="text-xl font-bold mb-4">System Status</h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <span class="font-medium">OAuth</span>
+                    <span :class="getStatusColor(systemStatus.oauth)" 
+                          x-text="systemStatus.oauth"></span>
+                </div>
+                
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <span class="font-medium">LM Studio</span>
+                    <span :class="getStatusColor(systemStatus.lm_studio)" 
+                          x-text="systemStatus.lm_studio"></span>
+                </div>
+                
+                <div class="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
+                    <span class="font-medium">Google Sheets</span>
+                    <span :class="getStatusColor(systemStatus.sheets)" 
+                          x-text="systemStatus.sheets"></span>
+                </div>
+            </div>
+        </div>
+        
+    </div>
+    
+    <!-- Alpine.js App Logic -->
+    <script>
+        function app() {
+            return {
+                stats: {},
+                jobs: [],
+                systemStatus: {
+                    oauth: 'Checking...',
+                    lm_studio: 'Checking...',
+                    sheets: 'Checking...'
+                },
+                commandOutput: '',
+                lastUpdate: new Date().toLocaleTimeString(),
+                chart: null,
+                
+                init() {
+                    this.refreshData();
+                    // Auto-refresh every 30 seconds
+                    setInterval(() => this.refreshData(), 30000);
+                },
+                
+                async refreshData() {
+                    await this.loadStats();
+                    await this.loadJobs();
+                    await this.loadSystemStatus();
+                    this.lastUpdate = new Date().toLocaleTimeString();
+                },
+                
+                async loadStats() {
+                    try {
+                        const response = await fetch('/api/stats');
+                        const data = await response.json();
+                        if (data.success) {
+                            this.stats = data.stats;
+                            this.updateChart();
+                        }
+                    } catch (error) {
+                        console.error('Error loading stats:', error);
+                    }
+                },
+                
+                async loadJobs() {
+                    try {
+                        const response = await fetch('/api/jobs');
+                        const data = await response.json();
+                        if (data.success) {
+                            this.jobs = data.jobs;
+                        }
+                    } catch (error) {
+                        console.error('Error loading jobs:', error);
+                    }
+                },
+                
+                async loadSystemStatus() {
+                    try {
+                        const response = await fetch('/api/status');
+                        const data = await response.json();
+                        if (data.success) {
+                            this.systemStatus = data.status;
+                        }
+                    } catch (error) {
+                        console.error('Error loading system status:', error);
+                    }
+                },
+                
+                updateChart() {
+                    const ctx = document.getElementById('statusChart');
+                    if (!ctx) return;
+                    
+                    if (this.chart) {
+                        this.chart.destroy();
+                    }
+                    
+                    const statuses = Object.keys(this.stats.by_status || {});
+                    const counts = Object.values(this.stats.by_status || {});
+                    
+                    this.chart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: statuses,
+                            datasets: [{
+                                data: counts,
+                                backgroundColor: [
+                                    '#3B82F6', // blue
+                                    '#10B981', // green
+                                    '#F59E0B', // orange
+                                    '#EF4444', // red
+                                    '#8B5CF6', // purple
+                                    '#6B7280'  // gray
+                                ]
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    position: 'bottom'
+                                }
+                            }
+                        }
+                    });
+                },
+                
+                async runCommand(command) {
+                    this.commandOutput = `Running ${command}...`;
+                    
+                    try {
+                        const response = await fetch(`/api/run/${command}`, {
+                            method: 'POST'
+                        });
+                        const data = await response.json();
+                        
+                        if (data.success) {
+                            this.commandOutput = `✓ ${data.message} (PID: ${data.pid})`;
+                            // Refresh data after 5 seconds
+                            setTimeout(() => this.refreshData(), 5000);
+                        } else {
+                            this.commandOutput = `✗ Error: ${data.error}`;
+                        }
+                    } catch (error) {
+                        this.commandOutput = `✗ Error: ${error.message}`;
+                    }
+                },
+                
+                getFitBadgeClass(score) {
+                    const numScore = parseFloat(score) || 0;
+                    if (numScore >= 8) return 'px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium';
+                    if (numScore >= 6) return 'px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium';
+                    if (numScore >= 4) return 'px-2 py-1 bg-yellow-100 text-yellow-800 rounded-full text-xs font-medium';
+                    return 'px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium';
+                },
+                
+                getStatusBadgeClass(status) {
+                    const classes = {
+                        'New': 'px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium',
+                        'Active': 'px-2 py-1 bg-green-100 text-green-800 rounded-full text-xs font-medium',
+                        'Expired': 'px-2 py-1 bg-red-100 text-red-800 rounded-full text-xs font-medium',
+                        'Applied': 'px-2 py-1 bg-purple-100 text-purple-800 rounded-full text-xs font-medium',
+                        'ParsedOK': 'px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium'
+                    };
+                    return classes[status] || 'px-2 py-1 bg-gray-100 text-gray-800 rounded-full text-xs font-medium';
+                },
+                
+                getStatusColor(status) {
+                    if (status && (status.includes('Connected') || status.includes('Running'))) {
+                        return 'text-green-600 font-medium';
+                    }
+                    if (status && status.includes('Offline')) {
+                        return 'text-red-600 font-medium';
+                    }
+                    return 'text-yellow-600 font-medium';
+                }
+            }
+        }
+    </script>
+    
+</body>
+</html>

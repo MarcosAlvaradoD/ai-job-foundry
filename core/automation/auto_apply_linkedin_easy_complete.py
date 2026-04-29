@@ -11,6 +11,7 @@ import os
 import sys
 import json
 import re
+import urllib.request as _urllib
 from datetime import datetime
 from typing import Dict, List, Optional
 from pathlib import Path
@@ -19,6 +20,7 @@ from dotenv import load_dotenv
 
 sys.path.append(str(Path(__file__).parent.parent.parent))
 from core.sheets.sheet_manager import SheetManager
+from core.enerd_bridge import ENERDBridge, CV_FALLBACK
 
 # CV DATA - COMPLETE
 CV_DATA = {
@@ -48,7 +50,8 @@ CV_DATA = {
     "scrum_experience": "Yes",
     "power_bi_experience": "Yes",
     
-    # Industry    "erp_experience": "Yes",
+    # Industry experience
+    "erp_experience": "Yes",
     "banking_experience": "Yes",
     "healthcare_experience": "Yes",
     "manufacturing_experience": "Yes",
@@ -63,30 +66,116 @@ class EasyApplyBot:
         load_dotenv()
         self.dry_run = dry_run
         self.sheet_manager = SheetManager()
-        self.cv_data = CV_DATA
+        self.cv_data = CV_DATA.copy()
+        self._bridge = ENERDBridge()          # ENERD bridge para respuestas inteligentes
+        self._base_cv = CV_DATA.copy()        # Respaldo original, nunca se modifica
+        self._current_job: dict = {}          # Job activo — se actualiza por enrich_for_job
+
+    async def enrich_for_job(self, job: dict) -> None:
+        """
+        Consulta ENERD para enriquecer cv_data con respuestas específicas para ESTE trabajo.
+        Si ENERD no está disponible, usa el CV_DATA original sin interrupciones.
+        """
+        title   = job.get('Role', job.get('title', 'N/A'))
+        company = job.get('Company', job.get('company', 'N/A'))
+        print(f"   🧠 ENERD analizando oferta: {title} @ {company}...")
+
+        job_normalized = {
+            "title":       title,
+            "company":     company,
+            "description": job.get('description', job.get('Why', '')),
+            "url":         job.get('ApplyURL', job.get('url', '')),
+            "location":    job.get('Location', ''),
+            "fit_score":   job.get('FitScore', 0),
+            "why":         job.get('Why', ''),
+        }
+        self._current_job = job_normalized   # Guardar para uso en screening
+
+        enriched = await self._bridge.analyze_job(
+            job=job_normalized,
+            generate_cover_letter=True,
+        )
+
+        if enriched.source == "enerd" and enriched.confidence >= 0.5:
+            # Fusionar respuestas de ENERD sobre base original
+            self.cv_data = {**self._base_cv, **enriched.field_answers}
+            if enriched.cover_letter:
+                self.cv_data['cover_letter'] = enriched.cover_letter
+            print(f"   ✅ ENERD: {len(enriched.field_answers)} campos enriquecidos "
+                  f"(confianza={enriched.confidence:.0%})")
+            if enriched.clarifications_needed:
+                print(f"   ❓ {len(enriched.clarifications_needed)} campos pendientes "
+                      f"— ver http://localhost:4010 > Clarificaciones")
+        else:
+            self.cv_data = self._base_cv.copy()
+            print(f"   ⚡ ENERD offline/baja confianza — usando CV_DATA base")
         
     async def click_easy_apply(self, page: Page) -> bool:
-        """Click Easy Apply button"""
+        """Click Easy Apply button using JavaScript — handles obfuscated LinkedIn class names."""
         try:
-            # Multiple ways to find it
-            selectors = [
+            # Use JS to find the REAL apply button in the job detail area (not sidebar cards)
+            clicked = await page.evaluate("""
+                () => {
+                    const EASY_KEYWORDS = ['easy apply', 'solicitar fácil', 'solicitar facil',
+                                           'quick apply', 'solicitar'];
+                    const NAV_SKIP      = ['home', 'me', 'jobs', 'messaging', 'notifications',
+                                           'skip to', 'for business', 'post a job', 'find a job',
+                                           'search', 'premium', 'recruiter'];
+
+                    // Restrict search to the main job view — exclude the sidebar job cards
+                    const jobRoot = document.querySelector(
+                        '.jobs-details, .job-view-layout, '
+                        + '.jobs-unified-top-card, '
+                        + '[class*="jobs-details"], '
+                        + '[class*="job-view"]'
+                    ) || document.querySelector('main') || document;
+
+                    const buttons = Array.from(jobRoot.querySelectorAll('button'));
+
+                    for (const btn of buttons) {
+                        const text = (btn.innerText || btn.textContent || '').toLowerCase().trim();
+                        const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+
+                        if (btn.closest('nav, header, [role="navigation"], aside')) continue;
+                        if (NAV_SKIP.some(kw => text === kw || text.startsWith(kw + '\\n'))) continue;
+                        // Skip multiline texts that are job card previews (> 40 chars)
+                        if (text.length > 60) continue;
+
+                        if (EASY_KEYWORDS.some(kw => text === kw || aria.includes(kw))) {
+                            const rect = btn.getBoundingClientRect();
+                            if (rect.width > 10 && rect.height > 10) {
+                                btn.scrollIntoView({ behavior: 'instant', block: 'center' });
+                                btn.click();
+                                return { clicked: true, text: text, aria: aria };
+                            }
+                        }
+                    }
+                    return null;
+                }
+            """)
+
+            if clicked:
+                print(f"   ✅ Clicked Easy Apply (text='{clicked.get('text','')}')")
+                await asyncio.sleep(2)
+                return True
+
+            # Fallback: standard Playwright selectors
+            for selector in [
+                'button[aria-label*="Easy Apply"]',
+                'button[aria-label*="Solicitar"]',
                 'button:has-text("Easy Apply")',
                 'button:has-text("Solicitar fácil")',
-                'button:has-text("Quick Apply")',
-                'button.jobs-apply-button'
-            ]
-            
-            for selector in selectors:
+            ]:
                 try:
-                    button = page.locator(selector).first
-                    if await button.is_visible(timeout=2000):
-                        await button.click()
-                        print("   ✅ Clicked Easy Apply")
+                    btn = page.locator(selector).first
+                    if await btn.count() > 0 and await btn.is_visible(timeout=1500):
+                        await btn.click()
+                        print(f"   ✅ Clicked Easy Apply (fallback: {selector})")
                         await asyncio.sleep(2)
                         return True
-                except:
+                except Exception:
                     continue
-                    
+
             return False
         except Exception as e:
             print(f"   ❌ Easy Apply click failed: {e}")
@@ -103,25 +192,25 @@ class EasyApplyBot:
                 if await email_field.is_visible(timeout=2000):
                     await email_field.fill(self.cv_data['email'])
                     print(f"      ✓ Email: {self.cv_data['email']}")
-            except:
+            except Exception:
                 pass
-            
+
             # Phone country code
             try:
                 phone_country = page.locator('select[id*="phone" i]').first
                 if await phone_country.is_visible(timeout=2000):
                     await phone_country.select_option(label=self.cv_data['phone_country'])
                     print(f"      ✓ Phone country: {self.cv_data['phone_country']}")
-            except:
+            except Exception:
                 pass
-            
+
             # Phone number
             try:
                 phone_field = page.locator('input[id*="phone" i]').first
                 if await phone_field.is_visible(timeout=2000):
                     await phone_field.fill(self.cv_data['phone'])
                     print(f"      ✓ Phone: {self.cv_data['phone']}")
-            except:
+            except Exception:
                 pass
             
             await asyncio.sleep(1)
@@ -158,7 +247,7 @@ class EasyApplyBot:
                             print(f"      ✓ Uploaded: {Path(self.cv_data['resume_path']).name}")
                             await asyncio.sleep(2)
                             return True
-                except:
+                except Exception:
                     continue
             
             print("      - No upload needed")
@@ -173,7 +262,8 @@ class EasyApplyBot:
         print("   ❓ Answering screening questions...")
         
         try:
-            # Get all form groups (questions)            form_groups = page.locator('div[data-test-form-element], .jobs-easy-apply-form-section__grouping')
+            # Get all form groups (questions)
+            form_groups = page.locator('div[data-test-form-element], .jobs-easy-apply-form-section__grouping')
             count = await form_groups.count()
             
             if count == 0:
@@ -192,18 +282,49 @@ class EasyApplyBot:
                     
                     print(f"      Q: {question_text[:80]}...")
                     
-                    # STRATEGY: Match question keywords to answers
+                    # STRATEGY 1: Match question keywords to pre-loaded cv_data
                     answer = self._match_screening_answer(question_lower)
-                    
+
+                    # STRATEGY 2: ENERD — IA local lee la pregunta + opciones en vivo
+                    if not answer:
+                        try:
+                            # Extraer opciones visibles en el formulario (radio/select)
+                            options: list[str] = []
+                            radio_labels = group.locator('label')
+                            for r in range(await radio_labels.count()):
+                                txt = (await radio_labels.nth(r).inner_text()).strip()
+                                if txt and len(txt) < 120:
+                                    options.append(txt)
+                            select_opts = group.locator('select option')
+                            for r in range(await select_opts.count()):
+                                txt = (await select_opts.nth(r).inner_text()).strip()
+                                if txt and txt not in ('', '--', 'Select'):
+                                    options.append(txt)
+
+                            print(f"         🧠 ENERD analizando: '{question_text[:60]}' "
+                                  f"opciones={options[:4]}")
+                            answer = await self._bridge.get_field_answer(
+                                field_name  = question_lower[:80],
+                                field_label = question_text[:120],
+                                field_type  = "radio" if options else "text",
+                                job         = self._current_job,
+                                options     = options,
+                            )
+                            if answer:
+                                print(f"         🤖 ENERD: '{answer}'")
+                            else:
+                                print(f"         ❓ ENERD sin respuesta — guardando duda")
+                        except Exception as _e:
+                            print(f"         ⚠️ ENERD lookup error: {_e}")
+
                     if answer:
-                        # Try different input types
                         filled = await self._fill_question(group, answer, question_lower)
                         if filled:
                             print(f"         A: {answer}")
                         else:
                             print(f"         ⚠️ Could not fill answer")
                     else:
-                        print(f"         - No matching answer found")
+                        print(f"         - Sin respuesta (campo guardado en clarificaciones)")
                     
                 except Exception as e:
                     continue
@@ -311,13 +432,13 @@ class EasyApplyBot:
                     await select.first.select_option(label=answer)
                     await asyncio.sleep(0.3)
                     return True
-                except:
+                except Exception:
                     # Try by value
                     try:
                         await select.first.select_option(value=answer)
                         await asyncio.sleep(0.3)
                         return True
-                    except:
+                    except Exception:
                         return False
             
             # Text input (salary, years, etc)
@@ -352,11 +473,11 @@ class EasyApplyBot:
                         print("   ➡️  Clicked Next")
                         await asyncio.sleep(2)
                         return True
-                except:
+                except Exception:
                     continue
-            
+
             return False
-        except:
+        except Exception:
             return False
     
     async def submit_application(self, page: Page) -> bool:
@@ -382,98 +503,150 @@ class EasyApplyBot:
                             print("   🎯 Application SUBMITTED!")
                             await asyncio.sleep(3)
                             return True
-                except:
+                except Exception:
                     continue
-            
+
             return False
-        except:
+        except Exception:
             return False
     
     async def detect_apply_type(self, page: Page) -> str:
         """
-        Detect if job has Easy Apply or requires External application
-        
+        Detect if job has Easy Apply or requires External application.
+        Uses JavaScript evaluation to find the apply button reliably across
+        LinkedIn UI versions (2025/2026).
+
         Returns:
             "easy_apply" if Easy Apply button found
             "external" if only external apply button found
+            "unknown" if no apply button found
         """
         try:
-            # Wait for page to fully load (LinkedIn 2026 lazy-loads apply button)
-            await asyncio.sleep(5)
-            # Ensure top of page is visible (sticky apply bar)
+            # ── STEP 0: Check for expired FIRST before anything else ──────────
+            # Wait for page content (not just nav bar)
+            try:
+                await page.wait_for_selector('h1, .jobs-details, .job-view-layout', timeout=8000)
+            except Exception:
+                pass
+            await asyncio.sleep(2)
+
+            body_text = (await page.inner_text('body')).lower()
+            expired_signals = [
+                'no longer accepting applications',
+                'this job is closed',
+                'job is no longer available',
+                'this listing has expired',
+                'ya no acepta solicitudes',
+                'oferta cerrada',
+                'no longer available',
+            ]
+            if any(s in body_text for s in expired_signals):
+                print("   ⏱️  Job is EXPIRED (no longer accepting applications)")
+                return "expired"
+
             await page.evaluate("window.scrollTo(0, 0)")
             await asyncio.sleep(1)
 
-            # FIRST: Check for Easy Apply button (most specific selectors first)
-            easy_apply_selectors = [
-                # LinkedIn's specific Easy Apply selectors
-                'button.jobs-apply-button--top-card',
+            # ── STEP 1: JS search — ONLY in the left job detail panel ─────────
+            # LinkedIn layout: left panel = job details + apply button
+            #                  right panel = sidebar with other job cards
+            # We must ignore the sidebar completely.
+            result = await page.evaluate("""
+                () => {
+                    const EASY_KW = ['easy apply', 'solicitar fácil', 'solicitar facil', 'quick apply'];
+                    const EXT_KW  = ['apply on company website', 'apply on linkedin'];
+
+                    // Target: the LEFT job content panel only (not the sidebar)
+                    // LinkedIn puts the apply button in the top-card area
+                    const PANEL_SELECTORS = [
+                        '.jobs-details__main-content',
+                        '.job-details-jobs-unified-top-card__container--two-pane',
+                        '.jobs-unified-top-card',
+                        '.job-view-layout',
+                        '.jobs-details',
+                        'main',
+                    ];
+                    let panel = null;
+                    for (const sel of PANEL_SELECTORS) {
+                        panel = document.querySelector(sel);
+                        if (panel) break;
+                    }
+                    if (!panel) panel = document;
+
+                    // Find buttons ONLY within the panel
+                    const buttons = Array.from(panel.querySelectorAll('button'));
+
+                    for (const btn of buttons) {
+                        // Use trimmed first line only (ignore multiline sidebar card text)
+                        const rawText = (btn.innerText || btn.textContent || '');
+                        const firstLine = rawText.split('\\n')[0].toLowerCase().trim();
+                        const aria = (btn.getAttribute('aria-label') || '').toLowerCase();
+
+                        // Skip nav / header elements
+                        if (btn.closest('nav, header, [role="navigation"], aside')) continue;
+
+                        // Match on EXACT easy apply keywords (first line only, ≤ 30 chars)
+                        if (firstLine.length <= 30) {
+                            if (EASY_KW.some(kw => firstLine === kw || aria.includes(kw))) {
+                                const rect = btn.getBoundingClientRect();
+                                if (rect.width > 10 && rect.height > 10) {
+                                    return {
+                                        type: 'easy_apply',
+                                        text: firstLine,
+                                        aria: aria.slice(0, 60),
+                                        cls:  btn.className.slice(0, 80),
+                                    };
+                                }
+                            }
+                        }
+                    }
+
+                    // Check for external apply link
+                    const links = Array.from(panel.querySelectorAll('a, button'));
+                    for (const el of links) {
+                        const firstLine = (el.innerText || '').split('\\n')[0].toLowerCase().trim();
+                        const aria = (el.getAttribute('aria-label') || '').toLowerCase();
+                        if (EXT_KW.some(kw => firstLine.includes(kw) || aria.includes(kw))) {
+                            const rect = el.getBoundingClientRect();
+                            if (rect.width > 10 && rect.height > 10)
+                                return { type: 'external', text: firstLine };
+                        }
+                    }
+
+                    return null;
+                }
+            """)
+
+            if result:
+                btn_type = result.get('type', 'unknown')
+                btn_text = result.get('text', '')
+                btn_cls  = result.get('cls', '')
+                print(f"   🔍 Detected: {btn_type} — text='{btn_text}'")
+                if btn_cls:
+                    print(f"       class: {btn_cls[:80]}")
+                return btn_type
+
+            # ── STEP 2: Fallback Playwright selectors ─────────────────────────
+            await asyncio.sleep(2)
+            for sel in [
                 'button[aria-label*="Easy Apply"]',
-                'button[aria-label*="easy apply"]',
                 'button[aria-label*="Solicitar fácil"]',
-                'button[aria-label*="Apply to"]',
-                'button:has-text("Easy Apply"):visible',
-                'button:has-text("Solicitar fácil"):visible',
-                'button.jobs-apply-button:has-text("Easy Apply")',
-                'button.jobs-apply-button:has-text("Solicitar")',
-                # LinkedIn 2025/2026 new UI selectors
-                'button[data-live-test-job-apply-button]',
-                '.jobs-apply-button',
-                'button:has-text("Quick Apply")',
-                # Broad last-resort: any Apply button that isn't navigation
-                'button:has-text("Apply"):visible',
-            ]
-            
-            for selector in easy_apply_selectors:
+                'button.jobs-apply-button--top-card',
+            ]:
                 try:
-                    button = page.locator(selector).first
-                    if await button.count() > 0:
-                        if await button.is_visible(timeout=2000):
-                            print(f"   🔍 Easy Apply detected (selector: {selector[:40]}...)")
-                            return "easy_apply"
-                except Exception as sel_err:
+                    el = page.locator(sel).first
+                    if await el.count() > 0 and await el.is_visible(timeout=1500):
+                        print(f"   🔍 Easy Apply (fallback): {sel}")
+                        return "easy_apply"
+                except Exception:
                     continue
-            
-            # SECOND: Check for external apply
-            external_selectors = [
-                # LinkedIn's external apply selectors
-                'a.jobs-apply-button--top-card',
-                'a[href*="applyUrl"]',
-                'button:has-text("Apply"):visible:not(:has-text("Easy"))',
-                'button:has-text("Solicitar"):visible:not(:has-text("fácil"))',
-                'a:has-text("Apply on company website")',
-                'a[class*="jobs-apply-button"]',
-            ]
-            
-            for selector in external_selectors:
-                try:
-                    button = page.locator(selector).first
-                    if await button.count() > 0:
-                        if await button.is_visible(timeout=2000):
-                            print(f"   🔍 External apply detected (selector: {selector[:40]}...)")
-                            return "external"
-                except Exception as sel_err:
-                    continue
-            
-            # THIRD: Try to find ANY apply-related button
-            print("   🔍 Searching for any apply button...")
-            all_buttons = page.locator('button, a[class*="apply"]')
-            count = await all_buttons.count()
-            print(f"   Found {count} potential apply buttons")
-            
-            # Debug: Print first 5 button texts
-            for i in range(min(5, count)):
-                try:
-                    btn = all_buttons.nth(i)
-                    text = await btn.inner_text(timeout=1000)
-                    print(f"   Button {i}: {text.strip()[:50]}")
-                except:
-                    continue
-            
+
+            title = await page.title()
+            print(f"   ⚠️  No apply button found — {title[:60]}")
             return "unknown"
-            
+
         except Exception as e:
-            print(f"   ⚠️ Error detecting apply type: {e}")
+            print(f"   ⚠️ detect_apply_type error: {e}")
             return "unknown"
     
     async def process_easy_apply(self, job: Dict, page: Page) -> bool:
@@ -500,14 +673,53 @@ class EasyApplyBot:
         # Step 1: Navigate
         try:
             await page.goto(url, wait_until='domcontentloaded', timeout=30000)
-            # Scroll to top so the sticky apply button is visible
             await page.evaluate("window.scrollTo(0, 0)")
+
+            # If it's a search results URL, click the first job card to load the job detail
+            if '/jobs/search/' in page.url or '/jobs/search/' in url:
+                print("   🔍 Search URL detected — clicking first job result...")
+                try:
+                    # Wait for job cards list
+                    await page.wait_for_selector(
+                        '.jobs-search-results__list-item, .job-card-container, [data-job-id]',
+                        timeout=10000
+                    )
+                    first_card = page.locator(
+                        '.jobs-search-results__list-item, .job-card-container'
+                    ).first
+                    if await first_card.count() > 0:
+                        await first_card.click()
+                        await asyncio.sleep(2)
+                        # Extract currentJobId and navigate to direct job URL
+                        import re as _re
+                        m = _re.search(r"currentJobId=(\d+)", page.url)
+                        if m:
+                            job_id = m.group(1)
+                            direct_url = f"https://www.linkedin.com/jobs/view/{job_id}"
+                            print(f"   ➡️  Navigating direct: {direct_url}")
+                            await page.goto(direct_url, wait_until="domcontentloaded", timeout=20000)
+                            await asyncio.sleep(3)
+                        else:
+                            # No jobId extracted — wait for panel
+                            try:
+                                await page.wait_for_selector(
+                                    '.jobs-details, button[aria-label*="Easy Apply"]',
+                                    timeout=8000
+                                )
+                            except Exception:
+                                await asyncio.sleep(4)
+                        print(f"   ✅ Clicked first result, now at: {page.url[:80]}")
+                    else:
+                        print("   ⚠️  No job cards found in search results")
+                except Exception as e:
+                    print(f"   ⚠️  Could not click job result: {e}")
+
             # Wait for job title to confirm page fully loaded
             try:
                 await page.wait_for_selector('h1, .job-details-jobs-unified-top-card__job-title', timeout=8000)
             except Exception:
                 pass
-            await asyncio.sleep(5)
+            await asyncio.sleep(3)
             print("   ✅ Page loaded")
         except Exception as e:
             print(f"   ❌ Navigation failed: {e}")
@@ -516,15 +728,119 @@ class EasyApplyBot:
         # Step 2: Detect apply type
         apply_type = await self.detect_apply_type(page)
         
-        if apply_type == "external":
+        if apply_type == "expired":
+            print("   ⏱️  Job expired — marking Skip-Expired in Sheet")
+            job['_apply_type'] = 'expired'
+            self.update_job_status(job, 'Skip-Expired')
+            return False
+        elif apply_type == "external":
             print("   ⚠️  This is an EXTERNAL apply (not Easy Apply)")
-            job['_apply_type'] = 'external'  # Mark for summary
+            job['_apply_type'] = 'external'
+            # Capture the external apply URL for manual follow-up
+            try:
+                ext_href = await page.evaluate('''
+                    () => {
+                        const links = Array.from(document.querySelectorAll('a[href]'));
+                        for (const a of links) {
+                            const t = (a.innerText || '').toLowerCase().trim();
+                            const h = a.href || '';
+                            if ((t === 'apply' || t === 'apply now') && !h.includes('linkedin.com')) {
+                                return h;
+                            }
+                        }
+                        return null;
+                    }
+                ''')
+                ext_info = f"external_url={ext_href}" if ext_href else "no external URL found"
+                self.chalan_store(
+                    f"EXTERNAL: {role} @ {company} — needs manual apply. {ext_info}. LinkedIn: {page.url}",
+                    importance=6, tags=["auto_apply", "external", "manual_needed"]
+                )
+                if ext_href:
+                    print(f"   🔗 External URL: {ext_href[:100]}")
+            except Exception:
+                pass
             self.update_job_status(job, 'External Apply')
             return False
         elif apply_type == "unknown":
-            print("   ⚠️  Could not detect apply type")
-            self.update_job_status(job, 'No Easy Apply')
-            return False
+            # Check if job is expired / no longer accepting applications
+            try:
+                page_text = (await page.inner_text('body')).lower()
+                expired_signals = [
+                    'no longer accepting applications',
+                    'this job is closed',
+                    'job is no longer available',
+                    'this listing has expired',
+                    'ya no acepta solicitudes',
+                    'oferta cerrada',
+                ]
+                if any(s in page_text for s in expired_signals):
+                    print("   ⏱️  Job EXPIRED — marking in Sheet")
+                    self.update_job_status(job, 'Skip-Expired')
+                    job['_apply_type'] = 'expired'
+                    return False
+            except Exception:
+                pass
+
+            # --- AI Supervisor: ask what to do ---
+            print("   🤖 Calling AI supervisor...")
+            decision = await self.ai_supervisor(
+                page,
+                "Could not find Easy Apply button. Is there a button I'm missing? Should I scroll?",
+                extra_context=f"{company} {role}"
+            )
+            action = decision.get("action", "skip")
+            selector = decision.get("selector", "")
+
+            if action == "click" and selector:
+                try:
+                    el = page.locator(selector).first
+                    if await el.count() > 0 and await el.is_visible(timeout=3000):
+                        await el.click()
+                        await asyncio.sleep(3)
+                        # Re-detect after AI click
+                        apply_type2 = await self.detect_apply_type(page)
+                        if apply_type2 == "easy_apply":
+                            print("   ✅ AI found the button — continuing!")
+                            # Fall through to Easy Apply flow below
+                        else:
+                            print("   ❌ AI click didn't reveal Easy Apply")
+                            self.chalan_store(
+                                f"FAIL: {company} / {role} — AI tried '{selector}' but no Easy Apply appeared. URL: {page.url}",
+                                importance=5, tags=["auto_apply", "fail"]
+                            )
+                            self.update_job_status(job, 'Skip-NoButton')
+                            return False
+                    else:
+                        print(f"   ❌ AI selector not visible: {selector}")
+                        self.update_job_status(job, 'Skip-NoButton')
+                        return False
+                except Exception as ex:
+                    print(f"   ❌ AI click failed: {ex}")
+                    self.update_job_status(job, 'Skip-NoButton')
+                    return False
+            elif action == "wait":
+                await asyncio.sleep(5)
+                apply_type2 = await self.detect_apply_type(page)
+                if apply_type2 != "easy_apply":
+                    self.update_job_status(job, 'Skip-NoButton')
+                    return False
+            elif action == "scroll":
+                await page.evaluate("window.scrollTo(0, 400)")
+                await asyncio.sleep(2)
+                apply_type2 = await self.detect_apply_type(page)
+                if apply_type2 != "easy_apply":
+                    self.update_job_status(job, 'Skip-NoButton')
+                    return False
+            else:
+                # AI said skip or no good option
+                self.chalan_store(
+                    f"SKIP: {company} / {role} — no Easy Apply button found. AI reason: {decision.get('reason','?')}. URL: {page.url}",
+                    importance=4, tags=["auto_apply", "skip"]
+                )
+                print("   ⚠️  AI decided to skip this job")
+                self.update_job_status(job, 'Skip-NoButton')
+                return False
         
         print("   ✅ Easy Apply detected")
         
@@ -545,8 +861,12 @@ class EasyApplyBot:
                 success = page.locator('text=/Application sent|submitted|enviada/i')
                 if await success.count() > 0:
                     print("   🎉 Application completed successfully!")
+                    self.chalan_store(
+                        f"SUCCESS: {role} @ {company} applied via Easy Apply. URL: {url}",
+                        importance=8, tags=["auto_apply", "success"]
+                    )
                     return True
-            except:
+            except Exception:
                 pass
             
             # Fill contact info
@@ -574,37 +894,166 @@ class EasyApplyBot:
         
         return False
     
-    async def linkedin_login(self, page: Page) -> bool:
-        """Login to LinkedIn"""
-        email = os.getenv('LINKEDIN_EMAIL')
-        password = os.getenv('LINKEDIN_PASSWORD')
-        
-        if not email or not password:
-            print("❌ LinkedIn credentials not found in .env")
-            return False
-        
-        print("🔐 Logging into LinkedIn...")
-        
+    # ── AI Supervisor + Chalan memory ────────────────────────────────────────
+
+    def chalan_recall(self, query: str, limit: int = 5) -> list:
+        """Fetch relevant memories from Chalan about linkedin apply outcomes."""
         try:
-            await page.goto('https://www.linkedin.com/login', wait_until='domcontentloaded')
+            url = f"http://localhost:4001/memories?category=linkedin_apply&limit={limit}"
+            req = _urllib.Request(url, headers={"Content-Type": "application/json"})
+            with _urllib.urlopen(req, timeout=5) as resp:
+                memories = json.loads(resp.read())
+            # Filter for query relevance (simple substring match)
+            q = query.lower()
+            return [m for m in memories if q in m.get("content", "").lower()][:limit]
+        except Exception:
+            return []
+
+    def chalan_store(self, content: str, importance: int = 6, tags: list = None):
+        """Save a lesson learned to Chalan memory."""
+        try:
+            payload = json.dumps({
+                "content": content,
+                "category": "linkedin_apply",
+                "importance": importance,
+                "tags": tags or ["auto_apply"]
+            }).encode()
+            req = _urllib.Request(
+                "http://localhost:4001/memory",
+                data=payload,
+                headers={"Content-Type": "application/json"},
+                method="POST"
+            )
+            with _urllib.urlopen(req, timeout=5) as resp:
+                result = json.loads(resp.read())
+            return result.get("saved", False)
+        except Exception:
+            return False
+
+    async def ai_supervisor(self, page, situation: str, extra_context: str = "") -> dict:
+        """
+        Call LiteLLM when the bot is stuck.
+        Returns: {"action": "click|skip|wait|scroll", "selector": "...", "reason": "..."}
+        """
+        try:
+            url   = page.url
+            title = await page.title()
+
+            # Collect visible interactive elements
+            elements = await page.evaluate("""
+                () => {
+                    const out = [];
+                    document.querySelectorAll('button, [role="button"], a[href*="jobs"]').forEach(el => {
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width > 5 && rect.height > 5) {
+                            out.push({
+                                tag:  el.tagName,
+                                text: (el.innerText || el.textContent || '').trim().slice(0, 60),
+                                aria: el.getAttribute('aria-label') || '',
+                                cls:  (el.className || '').slice(0, 80)
+                            });
+                        }
+                    });
+                    return out.slice(0, 20);
+                }
+            """)
+
+            # Recall any relevant Chalan memories
+            company_hint = extra_context[:40] if extra_context else ""
+            memories = self.chalan_recall(company_hint) if company_hint else []
+            mem_text = ""
+            if memories:
+                mem_text = "\nPast experience:\n" + "\n".join(
+                    f"  - {m['content']}" for m in memories[:3]
+                )
+
+            prompt = (
+                f"You supervise a LinkedIn Easy Apply bot.\n"
+                f"Situation: {situation}\n"
+                f"URL: {url}\n"
+                f"Page title: {title}\n"
+                f"Extra context: {extra_context}\n"
+                f"{mem_text}\n"
+                f"Visible elements (buttons/links):\n"
+                + json.dumps(elements[:15], ensure_ascii=False) +
+                "\n\nWhat should the bot do RIGHT NOW?"
+                " Reply ONLY with valid JSON, no markdown:\n"
+                '{"action":"click|skip|wait|scroll","selector":"CSS selector if click (else empty)","reason":"brief"}'
+            )
+
+            data = json.dumps({
+                "model": "qwen2.5:14b",
+                "messages": [{"role": "user", "content": prompt}],
+                "max_tokens": 300,
+                "temperature": 0.1
+            }).encode()
+
+            req = _urllib.Request(
+                "http://localhost:4000/v1/chat/completions",
+                data=data,
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": "Bearer sk-1234567890abcdef"
+                },
+                method="POST"
+            )
+            with _urllib.urlopen(req, timeout=20) as resp:
+                result = json.loads(resp.read())
+
+            raw = result["choices"][0]["message"]["content"].strip()
+            # Extract JSON even if model wraps it in ```
+            s = raw.find("{")
+            e = raw.rfind("}") + 1
+            if s != -1 and e > s:
+                decision = json.loads(raw[s:e])
+                print(f"   🤖 AI says: {decision.get('action','?')} — {decision.get('reason','')[:80]}")
+                return decision
+        except Exception as ex:
+            print(f"   🤖 AI supervisor error: {ex}")
+        return {"action": "skip", "selector": "", "reason": "AI supervisor unavailable"}
+
+    async def linkedin_login(self, page: Page) -> bool:
+        """Login to LinkedIn - uses stored session first, falls back to form login."""
+        # Step 1: Navigate to feed and check if already logged in (via storage_state)
+        print("Checking LinkedIn session...")
+        try:
+            await page.goto("https://www.linkedin.com/feed", wait_until="domcontentloaded", timeout=15000)
             await asyncio.sleep(2)
-            
+            if any(k in page.url for k in ["feed", "mynetwork", "/jobs"]):
+                print("LinkedIn session active (no login needed)\n")
+                return True
+        except Exception:
+            pass
+
+        # Step 2: Session invalid or expired - fall back to credentials login
+        email = os.getenv("LINKEDIN_EMAIL")
+        password = os.getenv("LINKEDIN_PASSWORD")
+
+        if not email or not password:
+            print("LinkedIn credentials not found in .env")
+            return False
+
+        print("Session expired, logging in with credentials...")
+        try:
+            await page.goto("https://www.linkedin.com/login", wait_until="domcontentloaded", timeout=15000)
+            await asyncio.sleep(2)
+            await page.wait_for_selector('input[name="session_key"]', timeout=15000)
             await page.fill('input[name="session_key"]', email)
             await page.fill('input[name="session_password"]', password)
             await page.click('button[type="submit"]')
             await asyncio.sleep(5)
-            
-            if 'feed' in page.url or 'mynetwork' in page.url:
-                print("✅ Logged in successfully\n")
+
+            if any(k in page.url for k in ["feed", "mynetwork"]):
+                print("Logged in successfully\n")
                 return True
             else:
-                print("⚠️ Login may have failed\n")
+                print(f"Login may have failed - current URL: {page.url}\n")
                 return False
-                
+
         except Exception as e:
-            print(f"❌ Login failed: {e}")
+            print(f"Login failed: {e}")
             return False
-    
+
     def _classify_job_modality(self, job: Dict) -> str:
         """
         Clasifica una vacante por modalidad para decidir si aplica automático o requiere revisión.
@@ -783,8 +1232,23 @@ class EasyApplyBot:
                 args=['--disable-blink-features=AutomationControlled']
             )
             
+            # Load existing LinkedIn session cookies (Playwright storage_state format)
+            _session_candidates = [
+                r'C:\Users\MSI\Desktop\ai-job-foundry\data\credentials\linkedin_session.json',
+                r'C:\Users\MSI\Desktop\ai-job-foundry\data\credentials\linkedin_auth.json',
+            ]
+            _storage_state = None
+            for _sf in _session_candidates:
+                if Path(_sf).exists():
+                    _storage_state = _sf
+                    print(f'Loading LinkedIn session: {Path(_sf).name}')
+                    break
+            if not _storage_state:
+                print('No saved session found -- will attempt fresh login')
+
             context = await browser.new_context(
-                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+                storage_state=_storage_state
             )
             
             page = await context.new_page()
@@ -797,17 +1261,24 @@ class EasyApplyBot:
             # Process each job
             success_count = 0
             external_count = 0
+            expired_count = 0
             failed_count = 0
-            
+
             for i, job in enumerate(jobs, 1):
                 print(f"\n{'='*80}")
-                print(f"JOB {i}/{len(jobs)}")
+                print(f"JOB {i}/{len(jobs)}: {job.get('Role', 'N/A')} @ {job.get('Company', 'N/A')}")
                 print(f"{'='*80}")
-                
+
+                # ── ENERD: enriquecer CV con respuestas inteligentes por trabajo ──
+                await self.enrich_for_job(job)
+
                 success = await self.process_easy_apply(job, page)
-                
-                # Check if it was marked as External
-                if job.get('_apply_type') == 'external':
+
+                apply_type = job.get('_apply_type', '')
+                if apply_type == 'expired':
+                    expired_count += 1
+                    print(f"⏱️  EXPIRED: {job.get('Role')}")
+                elif apply_type == 'external':
                     external_count += 1
                     print(f"⚠️  EXTERNAL APPLY: {job.get('Role')}")
                 elif success:
@@ -817,19 +1288,20 @@ class EasyApplyBot:
                 else:
                     failed_count += 1
                     print(f"❌ FAILED: {job.get('Role')}")
-                
+
                 await asyncio.sleep(3)
-            
+
             await browser.close()
-            
+
             # Summary
             print("\n" + "=" * 80)
             print("SUMMARY")
             print("=" * 80)
             print(f"Total processed: {len(jobs)}")
-            print(f"✅ Easy Apply Success: {success_count}")
+            print(f"✅ Easy Apply Success:        {success_count}")
             print(f"⚠️  External Apply (skipped): {external_count}")
-            print(f"❌ Failed: {failed_count}")
+            print(f"⏱️  Expired (skipped):         {expired_count}")
+            print(f"❌ Failed:                    {failed_count}")
             print("=" * 80)
 
 

@@ -26,7 +26,7 @@ CV_DATA = {
     'fecha_nacimiento': '1985-02-07',  # AJUSTA ESTO
     'email': os.getenv('USER_EMAIL', 'markalvati@gmail.com'),
     'telefono': os.getenv('USER_PHONE', '+523323320358'),
-    'red_social': 'https://www.linkedin.com/in/marcosalvarado-b483b1b1/',
+    'red_social': 'https://www.linkedin.com/in/marcosalvarado-it/',
     'pais': 'México',
     'estado': 'Jalisco',
     

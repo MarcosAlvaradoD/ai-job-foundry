@@ -64,7 +64,7 @@ class LinkedInAutoApplier:
             if '/' in fit_str:
                 return int(fit_str.split('/')[0])
             return int(fit_str)
-        except:
+        except Exception:
             return 0
         
     async def get_eligible_jobs(self):

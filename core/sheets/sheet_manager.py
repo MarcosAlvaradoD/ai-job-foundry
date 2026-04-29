@@ -39,6 +39,7 @@ class SheetManager:
         # Nombres de pestañas
         self.tabs = {
             "registry":     "Registry",
+            "staging":      "Staging",      # Jobs entrantes — revisar antes de promover
             "linkedin":     "LinkedIn",
             "indeed":       "Indeed",
             "glassdoor":    "Glassdoor",
@@ -53,16 +54,21 @@ class SheetManager:
         # Cache de sheet IDs numéricos para batchUpdate (colores)
         self._sheet_id_cache: Dict[str, int] = {}
 
-    def _get_sheet_id(self, tab_name: str) -> int:
-        """Obtiene el sheetId numérico de una pestaña (necesario para batchUpdate de formato)."""
+    def _get_sheet_id(self, tab_name: str) -> Optional[int]:
+        """Obtiene el sheetId numérico de una pestaña (necesario para batchUpdate de formato).
+        Cachea todos los IDs en el primer llamado para minimizar API requests."""
         if tab_name not in self._sheet_id_cache:
-            spreadsheet = self.service.spreadsheets().get(
-                spreadsheetId=self.spreadsheet_id
-            ).execute()
-            for sheet in spreadsheet.get('sheets', []):
-                title = sheet['properties']['title']
-                self._sheet_id_cache[title] = sheet['properties']['sheetId']
-        return self._sheet_id_cache[tab_name]
+            try:
+                spreadsheet = self.service.spreadsheets().get(
+                    spreadsheetId=self.spreadsheet_id
+                ).execute()
+                for sheet in spreadsheet.get('sheets', []):
+                    title = sheet['properties']['title']
+                    self._sheet_id_cache[title] = sheet['properties']['sheetId']
+            except Exception as e:
+                print(f"⚠️  _get_sheet_id error: {e}")
+                return None
+        return self._sheet_id_cache.get(tab_name)
 
     def color_row_by_fit(self, row_num: int, fit_score: int, tab: str = "linkedin") -> bool:
         """
@@ -211,19 +217,35 @@ class SheetManager:
             return False
 
 
+    def ensure_headers(self, tab: str, headers: List[str]) -> None:
+        """Escribe los headers en la fila 1 si la pestaña está vacía.
+        Limpia el cache para que el siguiente _get_headers los tome.
+        """
+        tab_name = self.tabs.get(tab, tab)
+        existing = self._get_headers(tab_name)
+        if not existing:
+            self.service.spreadsheets().values().update(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{tab_name}!A1",
+                valueInputOption="USER_ENTERED",
+                body={"values": [headers]},
+            ).execute()
+            # Invalidate cache so next _get_headers reads the new row
+            self._headers_cache.pop(tab_name, None)
+
     def add_job(self, job_data: Dict, tab: str = "registry") -> bool:
         """
         Agrega una nueva oferta al Sheet
-        
+
         Args:
             job_data: Diccionario con datos de la oferta
             tab: Pestaña donde agregar
-        
+
         Returns:
             True si exitoso
         """
         tab_name = self.tabs.get(tab, "Registry")
-        
+
         # Obtener headers (cacheados)
         headers = self._get_headers(tab_name)
 
@@ -249,34 +271,51 @@ class SheetManager:
     def update_job(self, row_id: int, updates: Dict, tab: str = "registry") -> bool:
         """
         Actualiza una oferta existente
-        
+
         Args:
-            row_id: Número de fila (2 = primera oferta)
+            row_id: Número de fila (2 = primera oferta, 1 = headers — NO permitido)
             updates: Diccionario con columnas a actualizar
             tab: Pestaña
-        
+
         Returns:
             True si exitoso
         """
-        tab_name = self.tabs.get(tab, "Registry")
-        
+        if row_id < 2:
+            print(f"[ERROR] update_job: row_id={row_id} inválido (mínimo 2, la fila 1 son headers)")
+            return False
+
+        tab_name = self.tabs.get(tab, tab)  # fallback al nombre literal si no está en dict
+
         # Obtener headers (cacheados)
         headers = self._get_headers(tab_name)
 
-        # Actualizar columnas específicas
+        # Batch: construir todas las actualizaciones en un solo API call
+        data = []
         for column_name, value in updates.items():
             if column_name in headers:
                 col_index = headers.index(column_name)
-                col_letter = chr(65 + col_index)  # A=0, B=1, etc.
-                
-                self.service.spreadsheets().values().update(
-                    spreadsheetId=self.spreadsheet_id,
-                    range=f"{tab_name}!{col_letter}{row_id}",
-                    valueInputOption="USER_ENTERED",
-                    body={"values": [[str(value)]]}
-                ).execute()
-        
-        return True
+                col_letter = chr(65 + col_index) if col_index < 26 else (
+                    chr(64 + col_index // 26) + chr(65 + col_index % 26)
+                )
+                data.append({
+                    "range": f"{tab_name}!{col_letter}{row_id}",
+                    "values": [[str(value)]]
+                })
+            else:
+                print(f"[WARN] update_job: columna '{column_name}' no existe en {tab_name}")
+
+        if not data:
+            return False
+
+        try:
+            self.service.spreadsheets().values().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body={"valueInputOption": "USER_ENTERED", "data": data}
+            ).execute()
+            return True
+        except Exception as e:
+            print(f"[ERROR] update_job failed (row {row_id}, tab {tab_name}): {e}")
+            return False
     
     def update_cell(self, tab: str, row_id: int, column: str, value: str) -> bool:
         """
@@ -319,8 +358,9 @@ class SheetManager:
             for column_name, value in updates_dict.items():
                 if column_name in headers:
                     col_index = headers.index(column_name)
-                    col_letter = chr(65 + col_index)
-                    
+                    col_letter = chr(65 + col_index) if col_index < 26 else (
+                        chr(64 + col_index // 26) + chr(65 + col_index % 26)
+                    )
                     data.append({
                         'range': f"{tab_name}!{col_letter}{row_id}",
                         'values': [[str(value)]]
@@ -455,20 +495,6 @@ class SheetManager:
         except Exception as e:
             print(f"⚠️  set_row_color error: {e}")
             return False
-
-    def _get_sheet_id(self, tab_name: str) -> Optional[int]:
-        """Obtiene el sheetId numérico de una pestaña por nombre."""
-        try:
-            meta = self.service.spreadsheets().get(
-                spreadsheetId=self.spreadsheet_id
-            ).execute()
-            for sheet in meta.get('sheets', []):
-                props = sheet.get('properties', {})
-                if props.get('title') == tab_name:
-                    return props.get('sheetId')
-        except Exception as e:
-            print(f"⚠️  _get_sheet_id error: {e}")
-        return None
 
     def test_connection(self):
         """Test rápido de conexión"""

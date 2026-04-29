@@ -37,7 +37,7 @@ def fix_fit_scores():
                     'old_fit': fit_score,
                     'new_fit': round(fit_score / 10, 1)
                 })
-        except:
+        except Exception:
             continue
     
     if not jobs_to_fix:
@@ -67,20 +67,30 @@ def fix_fit_scores():
     
     for job in jobs_to_fix:
         try:
-            # Update FIT score in the job dict
-            job['original']['FitScore'] = job['new_fit']
-            
-            # TODO: Implement actual Sheets update
-            # For now, just count
-            updated += 1
-            
-            print(f"  [OK] {job['original']['Company']} - FIT: {job['old_fit']} → {job['new_fit']}")
-            
+            row_id = job['original'].get('_row', 0)
+            if not row_id or row_id < 2:
+                print(f"  [SKIP] {job['original'].get('Company', '?')} — no row index")
+                failed += 1
+                continue
+
+            ok = sheet_manager.update_job(
+                row_id=row_id,
+                updates={'FitScore': str(job['new_fit'])},
+                tab='registry',
+            )
+
+            if ok:
+                updated += 1
+                print(f"  [OK] {job['original']['Company']} - FIT: {job['old_fit']} → {job['new_fit']}")
+            else:
+                failed += 1
+                print(f"  [WARN] {job['original']['Company']} — update returned False")
+
             # Rate limiting
             time.sleep(0.5)
-            
+
         except Exception as e:
-            print(f"  [ERROR] {job['original']['Company']}: {e}")
+            print(f"  [ERROR] {job['original'].get('Company', '?')}: {e}")
             failed += 1
     
     print(f"\n{'='*70}")

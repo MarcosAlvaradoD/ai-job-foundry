@@ -84,16 +84,34 @@ def sheets_service(creds): return build("sheets", "v4", credentials=creds)
 STRIP_PARAMS = {
     "utm_source","utm_medium","utm_campaign","utm_term","utm_content",
     "gclid","fbclid","ao","s","guid","src","t","vt","uido","ea","cs","cb",
-    "jobListingId","pos"
+    "jobListingId","pos",
+    # LinkedIn tracking params (cause duplicate entries from email bulletins)
+    "trackingId","refId","trk","lipi","lici","midToken","midSig","eid",
 }
+
+_LI_JOB_RE = re.compile(r'/(?:comm/)?jobs/(?:view|comm/jobs/view)/(\d+)', re.IGNORECASE)
+
 def normalize_url(u: str) -> str:
+    """
+    Normaliza URL para deduplicación.
+    LinkedIn: extrae Job ID y devuelve URL canónica /jobs/view/{id}
+    así /comm/jobs/view/123, /jobs/view/123/ y /jobs/view/123?trackingId=x
+    quedan idénticos.
+    """
     if not u: return ""
     try:
+        # LinkedIn job ID normalization — the main source of duplicates
+        m = _LI_JOB_RE.search(u)
+        if m and 'linkedin.com' in u.lower():
+            return f"https://www.linkedin.com/jobs/view/{m.group(1)}"
+
         p = urlparse(u.strip())
         p = p._replace(fragment="")
         q = [(k,v) for (k,v) in parse_qsl(p.query, keep_blank_values=True)
              if k not in STRIP_PARAMS]
-        p = p._replace(query=urlencode(q), netloc=p.netloc.lower())
+        # Strip trailing slash from path
+        path = p.path.rstrip('/')
+        p = p._replace(query=urlencode(q), netloc=p.netloc.lower(), path=path)
         return urlunparse(p)
     except Exception:
         return u.strip()
@@ -243,7 +261,7 @@ def parse_email_raw(raw_b64):
                     plain_body += part.get_content()
                 elif content_type == "text/html":
                     html_body += part.get_content()
-            except:
+            except Exception:
                 pass
     else:
         content_type = msg.get_content_type() or ""
@@ -252,7 +270,7 @@ def parse_email_raw(raw_b64):
                 plain_body = msg.get_content()
             elif content_type == "text/html":
                 html_body = msg.get_content()
-        except:
+        except Exception:
             pass
     
     # Combine both sources
@@ -286,26 +304,33 @@ def extract_job_url(text: str) -> str:
     # Job board patterns (score, pattern)
     job_patterns = [
         (100, r'linkedin\.com/jobs/view/\d+'),
-        (100, r'indeed\.com/viewjob\?jk='),  # ✅ IMPROVED: More specific Indeed pattern
-        (95, r'indeed\.com/.*?jk=[a-f0-9]+'),  # ✅ IMPROVED: Indeed with job key
-        (95, r'glassdoor\.com/job-listing/'),
-        (90, r'linkedin\.com/comm/jobs'),
-        (90, r'indeed\.com/rc/clk\?jk='),  # ✅ NEW: Indeed click tracking URLs
-        (90, r'glassdoor\.com.*?jl='),
-        (80, r'myworkdayjobs\.com'),
-        (80, r'greenhouse\.io'),
-        (80, r'lever\.co'),
-        (80, r'icims\.com'),
-        (70, r'careers\.|jobs\.|apply\.'),
+        (100, r'linkedin\.com/comm/jobs/view/\d+'),  # /comm/ variant with numeric ID
+        (100, r'indeed\.com/viewjob\?jk='),
+        (95,  r'indeed\.com/.*?jk=[a-f0-9]+'),
+        (95,  r'glassdoor\.com/job-listing/'),
+        (90,  r'indeed\.com/rc/clk\?jk='),
+        (90,  r'glassdoor\.com.*?jl='),
+        (80,  r'myworkdayjobs\.com'),
+        (80,  r'greenhouse\.io'),
+        (80,  r'lever\.co'),
+        (80,  r'icims\.com'),
+        (70,  r'careers\.|jobs\.|apply\.'),
     ]
-    
-    # Avoid patterns
+
+    # Avoid patterns — navigation, tracking, and non-job LinkedIn pages
     avoid = [
-        r'unsubscribe', r'preferences', r'settings', r'pixel\.', r'1x1\.gif',
+        r'unsubscribe', r'preferences', r'psettings', r'pixel\.', r'1x1\.gif',
         r'track\.', r'analytics\.', r'facebook\.com', r'twitter\.com',
         r'linkedin\.com/e/v2', r'linkedin\.com/comm/pulse', r'support\.', r'help\.',
-        r'profOnboarding',  # ✅ NEW: Avoid Indeed onboarding redirects
-        r'indeed\.com/\?from=',  # ✅ NEW: Avoid Indeed homepage redirects
+        r'profOnboarding', r'indeed\.com/\?from=',
+        # LinkedIn navigation links found in email footers
+        r'linkedin\.com/(?:comm/)?feed', r'linkedin\.com/(?:comm/)?messaging',
+        r'linkedin\.com/(?:comm/)?mynetwork', r'linkedin\.com/(?:comm/)?notifications',
+        r'linkedin\.com/(?:comm/)?jobs/collections',  # "similar jobs" collections
+        r'linkedin\.com/help/', r'linkedin\.com/legal/',
+        r'linkedin\.com/(?:comm/)?in/',  # profile links
+        r'linkedin\.com/(?:comm/)?company/',  # company pages
+        r'/jobs/view/[a-z]',  # slug-only URLs without numeric job ID
     ]
     
     scored_urls = []
@@ -381,7 +406,7 @@ def load_seen_ids():
     try:
         with open(SEEN_IDS_FILE, "r", encoding="utf-8") as f:
             return set(json.load(f))
-    except:
+    except Exception:
         return set()
 
 def save_seen_ids(ids):

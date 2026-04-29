@@ -97,7 +97,7 @@ class ExpireLifecycleManager:
                                 try:
                                     created_date = datetime.strptime(date_str.split('.')[0], fmt)
                                     break
-                                except:
+                                except Exception:
                                     continue
                             else:
                                 continue

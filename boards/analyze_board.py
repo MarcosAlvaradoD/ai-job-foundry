@@ -62,7 +62,7 @@ class JobBoardAnalyzer:
                         
                         if any(re.search(pattern, full_url) for pattern in job_patterns):
                             job_links.add(full_url)
-                    except:
+                    except Exception:
                         continue
                 
                 await browser.close()
@@ -97,7 +97,7 @@ class JobBoardAnalyzer:
                             title = title.strip()
                             if title and len(title) > 3:
                                 break
-                    except:
+                    except Exception:
                         continue
                 
                 company = "Unknown"
@@ -110,7 +110,7 @@ class JobBoardAnalyzer:
                             company = company.strip()
                             if company and len(company) > 2:
                                 break
-                    except:
+                    except Exception:
                         continue
                 
                 await browser.close()

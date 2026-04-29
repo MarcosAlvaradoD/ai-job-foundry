@@ -44,7 +44,7 @@ def main():
             fit_str = row[col_map['FitScore']] if len(row) > col_map.get('FitScore', 999) and row[col_map['FitScore']] else "0"
             try:
                 fit_score = int(fit_str.split('/')[0]) if '/' in fit_str else int(fit_str)
-            except:
+            except Exception:
                 fit_score = 0
             
             new_jobs.append({

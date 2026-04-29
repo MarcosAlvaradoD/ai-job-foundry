@@ -1,0 +1,29 @@
+project_name: devfoundry
+storage:
+  logs_dir: logs
+  state_dir: state
+llm:
+  router: local-first           # luego cambiamos a rules/score si quieres
+  providers:
+    - name: local
+      type: ollama             # o tu servidor local (LM Studio u otro)
+      base_url: http://127.0.0.1:11434
+      models:
+        - qwen2.5-14b-instruct
+    - name: gemini
+      type: google
+      model: gemini-1.5-pro
+      env_key: GOOGLE_API_KEY   # la pones como variable de entorno
+    - name: openai
+      type: openai
+      model: gpt-4o-mini
+      env_key: OPENAI_API_KEY   # idem
+routing_rules:
+  # por ahora, usa local para parches; nube cuando pidas “deep web search”/citas
+  - task: "patch_code"
+    prefer: ["local", "openai", "gemini"]
+  - task: "deep_search"
+    prefer: ["openai", "gemini", "local"]
+cost_guard:
+  soft_alert_usd: 1.00
+  hard_stop_usd: 5.00

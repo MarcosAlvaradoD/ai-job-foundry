@@ -191,16 +191,67 @@ def parse_email_raw(raw_b64):
         for part in msg.walk():
             if (part.get_content_type() or "") == "text/plain":
                 try: body += part.get_content()
-                except: pass
+                except Exception: pass
     else:
         if (msg.get_content_type() or "") == "text/plain":
             try: body = msg.get_content()
-            except: pass
+            except Exception: pass
     return subject, sender, body
 
 def first_url(text):
-    m = re.search(r'https?://\S+', text)
-    return m.group(0) if m else ""
+    """
+    Smart URL extraction — prioritizes actual job URLs and filters junk.
+    Replaces naive first-URL approach that picked up email footer/nav links.
+    """
+    urls = re.findall(r'https?://[^\s<>"]+', text)
+    if not urls:
+        return ""
+
+    job_patterns = [
+        (100, r'linkedin\.com/jobs/view/\d+'),
+        (100, r'linkedin\.com/comm/jobs/view/\d+'),
+        (100, r'indeed\.com/viewjob\?jk='),
+        (95,  r'indeed\.com/.*?jk=[a-f0-9]+'),
+        (95,  r'glassdoor\.com/job-listing/'),
+        (90,  r'indeed\.com/rc/clk\?jk='),
+        (90,  r'glassdoor\.com.*?jl='),
+        (80,  r'myworkdayjobs\.com'),
+        (80,  r'greenhouse\.io'),
+        (80,  r'lever\.co'),
+        (80,  r'icims\.com'),
+        (70,  r'careers\.|jobs\.|apply\.'),
+    ]
+
+    avoid = [
+        r'unsubscribe', r'preferences', r'psettings', r'pixel\.', r'1x1\.gif',
+        r'track\.', r'analytics\.', r'facebook\.com', r'twitter\.com',
+        r'linkedin\.com/e/v2', r'linkedin\.com/comm/pulse', r'support\.', r'help\.',
+        r'profOnboarding', r'indeed\.com/\?from=',
+        r'linkedin\.com/(?:comm/)?feed', r'linkedin\.com/(?:comm/)?messaging',
+        r'linkedin\.com/(?:comm/)?mynetwork', r'linkedin\.com/(?:comm/)?notifications',
+        r'linkedin\.com/(?:comm/)?jobs/collections',
+        r'linkedin\.com/help/', r'linkedin\.com/legal/',
+        r'linkedin\.com/(?:comm/)?in/',
+        r'linkedin\.com/(?:comm/)?company/',
+        r'/jobs/view/[a-z]',  # slug-only URLs without numeric job ID
+    ]
+
+    scored_urls = []
+    for url in urls:
+        url_lower = url.lower()
+        if any(re.search(p, url_lower) for p in avoid):
+            continue
+        score = 50
+        for points, pattern in job_patterns:
+            if re.search(pattern, url_lower):
+                score = points
+                break
+        scored_urls.append((score, url))
+
+    if not scored_urls:
+        return ""
+    scored_urls.sort(reverse=True)
+    return scored_urls[0][1]
 
 def detect_source(subject, sender, body, url):
     low = (subject + " " + sender + " " + body + " " + url).lower()
@@ -266,7 +317,7 @@ def load_seen_ids():
     try:
         with open(SEEN_IDS_FILE, "r", encoding="utf-8") as f:
             return set(json.load(f))
-    except:
+    except Exception:
         return set()
 
 def save_seen_ids(ids):

@@ -625,7 +625,7 @@ class InterviewCopilotOverlay:
                 try:
                     s = str(v).strip()
                     return int(s.split("/")[0]) if "/" in s else int(float(s))
-                except: return 0
+                except Exception: return 0
 
             jobs = []
             for row in values[1:]:

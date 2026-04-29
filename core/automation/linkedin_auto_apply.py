@@ -43,7 +43,7 @@ class LinkedInAutoApplyV3:
             'location': 'Guadalajara, Jalisco, Mexico',
             'city': 'Guadalajara',
             'country': 'Mexico',
-            'linkedin_url': 'https://www.linkedin.com/in/marcos-alvarado',
+            'linkedin_url': 'https://www.linkedin.com/in/marcosalvarado-it',
             'years_experience': '10',
             'current_company': 'Independent Consultant',
             'current_title': 'Project Manager / Business Analyst',
@@ -228,7 +228,8 @@ class LinkedInAutoApplyV3:
                         high_fit.append(job)
                     else:
                         skipped_external += 1
-            except:
+            except Exception as e:
+                print(f"    [WARN] Skipping job due to parse error: {e}")
                 continue
         
         print(f"[FOUND] {len(high_fit)} LinkedIn jobs ready for auto-apply")
@@ -250,7 +251,7 @@ class LinkedInAutoApplyV3:
             try:
                 label = input_element.locator('xpath=../preceding-sibling::label[1]').text_content()
                 label_text = label.lower() if label else ""
-            except:
+            except Exception:
                 pass
             
             # Combine all text for matching
@@ -279,7 +280,7 @@ class LinkedInAutoApplyV3:
                 return 'website'
             
             return 'unknown'
-        except:
+        except Exception:
             return 'unknown'
     
     def fill_form_field(self, input_element, field_type):
@@ -367,9 +368,9 @@ class LinkedInAutoApplyV3:
                     return button
             
             return None
-        except:
+        except Exception:
             return None
-    
+
     def check_for_submit(self, page):
         """Check if there's a Submit button"""
         try:
@@ -386,9 +387,9 @@ class LinkedInAutoApplyV3:
                     return button
             
             return None
-        except:
+        except Exception:
             return None
-    
+
     def apply_to_job(self, job, page, dry_run=False):
         """Apply to a single job (using existing page with session)"""
         company = job.get('Company', 'Unknown')
@@ -488,21 +489,23 @@ class LinkedInAutoApplyV3:
     def update_job_status(self, job, status, notes=""):
         """Update job status in Google Sheets"""
         try:
-            row_to_update = None
-            all_jobs = self.sheet_manager.read_data()
-            
-            # Find the job by CreatedAt + Company + Role
-            for idx, existing_job in enumerate(all_jobs):
-                if (existing_job.get('CreatedAt') == job.get('CreatedAt') and
-                    existing_job.get('Company') == job.get('Company') and
-                    existing_job.get('Role') == job.get('Role')):
-                    row_to_update = idx + 2  # +2 because row 1 is header, 0-indexed
-                    break
-            
-            if not row_to_update:
-                print("[ERROR] Could not find job in Sheets")
+            # Use _row if already available (set by get_all_jobs)
+            row_to_update = job.get('_row')
+
+            if not row_to_update or row_to_update < 2:
+                # Fallback: search by Company + Role + CreatedAt
+                all_jobs = self.sheet_manager.get_all_jobs(tab="registry")
+                for existing_job in all_jobs:
+                    if (existing_job.get('CreatedAt') == job.get('CreatedAt') and
+                        existing_job.get('Company') == job.get('Company') and
+                        existing_job.get('Role') == job.get('Role')):
+                        row_to_update = existing_job.get('_row')
+                        break
+
+            if not row_to_update or row_to_update < 2:
+                print(f"[ERROR] Could not find job in Sheets: {job.get('Company')} - {job.get('Role')}")
                 return False
-            
+
             # Update status and next action
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             update_data = {
@@ -510,11 +513,13 @@ class LinkedInAutoApplyV3:
                 'NextAction': notes if notes else status,
                 'SLA_Date': timestamp
             }
-            
-            # TODO: Implement Sheets update
-            print(f"[UPDATE] Would update row {row_to_update} with: {update_data}")
+
+            # Determine tab from job source
+            job_tab = "linkedin" if "linkedin.com" in job.get('ApplyURL', '').lower() else "registry"
+            self.sheet_manager.update_job(row_to_update, update_data, tab=job_tab)
+            print(f"[UPDATE] Row {row_to_update} ({job.get('Company')}) → Status={status}")
             return True
-            
+
         except Exception as e:
             print(f"[ERROR] Status update failed: {e}")
             return False

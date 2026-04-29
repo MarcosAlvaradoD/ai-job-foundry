@@ -67,7 +67,7 @@ def safe_fit(v):
         s = str(v).strip()
         if '/' in s: return int(s.split('/')[0])
         return int(float(s))
-    except: return 0
+    except Exception: return 0
 
 def main():
     print("=" * 65)

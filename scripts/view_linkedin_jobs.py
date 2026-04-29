@@ -32,7 +32,7 @@ def main():
         
         try:
             fit_score = float(fit)
-        except:
+        except Exception:
             fit_score = 0
         
         if 'linkedin.com/jobs' in url:

@@ -177,7 +177,7 @@ class GlassdoorSmartVerifier:
         finally:
             try:
                 page.close()
-            except:
+            except Exception:
                 pass
     
     def mark_job_status(self, row, new_status, reason):

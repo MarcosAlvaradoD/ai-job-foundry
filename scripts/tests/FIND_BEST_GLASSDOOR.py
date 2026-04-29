@@ -50,7 +50,7 @@ def main():
                 fit_str = row[col_map['FitScore']] if row[col_map['FitScore']] else "0"
                 try:
                     fit_score = int(fit_str.split('/')[0]) if '/' in fit_str else int(fit_str)
-                except:
+                except Exception:
                     fit_score = 0
                 
                 status = row[col_map['Status']] if len(row) > col_map.get('Status', 999) and row[col_map['Status']] else "Unknown"
