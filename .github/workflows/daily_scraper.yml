@@ -82,7 +82,61 @@ jobs:
           rm -f data/credentials/token.json
           echo "Credentials cleaned from runner"
 
-      # ── 7. Subir log como artifact (para diagnóstico) ────────────────────────
+      # ── 7. Notificación Telegram ─────────────────────────────────────────────
+      - name: Send Telegram notification
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          SCRAPER_MODE:       ${{ github.event.inputs.mode || 'live' }}
+        run: |
+          python3 - <<'PYEOF'
+          import os, urllib.request, json, glob, re
+          from datetime import datetime
+
+          token   = os.environ.get('TELEGRAM_BOT_TOKEN', '')
+          chat_id = os.environ.get('TELEGRAM_CHAT_ID', '')
+          mode    = os.environ.get('SCRAPER_MODE', 'live')
+
+          if not token or not chat_id:
+              print("⚠️  Telegram secrets no configurados — saltando notificación")
+              exit(0)
+
+          # Leer el log para sacar el conteo de jobs
+          count = 0
+          logs = sorted(glob.glob('logs/scraper_*.log'))
+          if logs:
+              with open(logs[-1], encoding='utf-8', errors='ignore') as f:
+                  for line in f:
+                      m = re.search(r'RESULTADO:\s*(\d+)', line)
+                      if m:
+                          count = int(m.group(1))
+                          break
+
+          today = datetime.utcnow().strftime('%d/%m/%Y')
+          status = "✅ Éxito" if count > 0 else "⚠️ Sin resultados"
+
+          msg = (
+              f"🤖 <b>AI Job Foundry — {today}</b>\n"
+              f"{status}\n\n"
+              f"🔍 <b>{count}</b> jobs encontrados en LinkedIn\n"
+              f"📋 Modo: {mode.upper()}\n"
+              f"📊 Revisa Google Sheets → pestaña Staging\n\n"
+              f"<i>Siguiente scraping: mañana 10am MX</i>"
+          )
+
+          url  = f"https://api.telegram.org/bot{token}/sendMessage"
+          data = json.dumps({"chat_id": chat_id, "text": msg, "parse_mode": "HTML"}).encode()
+          req  = urllib.request.Request(url, data=data,
+                                        headers={"Content-Type": "application/json"})
+          try:
+              urllib.request.urlopen(req, timeout=10)
+              print(f"✅ Telegram enviado: {count} jobs")
+          except Exception as e:
+              print(f"⚠️  Telegram error (no crítico): {e}")
+          PYEOF
+
+      # ── 8. Subir log como artifact (para diagnóstico) ────────────────────────
       - name: Upload scraper log
         if: always()
         uses: actions/upload-artifact@v4
