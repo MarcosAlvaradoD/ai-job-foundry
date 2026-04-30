@@ -67,7 +67,7 @@ jobs:
           PYEOF
 
       # ── 5. Correr el scraper ─────────────────────────────────────────────────
-      - name: Run LinkedIn scraper (LIVE → Staging)
+      - name: Run all scrapers (LinkedIn + Indeed + Computrabajo)
         run: python scripts/ci/run_scraper_ci.py
         env:
           SCRAPER_MODE: ${{ github.event.inputs.mode || 'live' }}
@@ -103,25 +103,39 @@ jobs:
               exit(0)
 
           # Leer el log para sacar el conteo de jobs
-          count = 0
+          total = 0
+          linkedin_count = 0
+          indeed_count = 0
+          computrabajo_count = 0
           logs = sorted(glob.glob('logs/scraper_*.log'))
           if logs:
               with open(logs[-1], encoding='utf-8', errors='ignore') as f:
                   for line in f:
-                      m = re.search(r'RESULTADO:\s*(\d+)', line)
+                      m = re.search(r'TOTAL=(\d+)', line)
                       if m:
-                          count = int(m.group(1))
-                          break
+                          total = int(m.group(1))
+                      ml = re.search(r'LinkedIn=(\d+)', line)
+                      if ml:
+                          linkedin_count = int(ml.group(1))
+                      mi = re.search(r'Indeed=(\d+)', line)
+                      if mi:
+                          indeed_count = int(mi.group(1))
+                      mc = re.search(r'Computrabajo=(\d+)', line)
+                      if mc:
+                          computrabajo_count = int(mc.group(1))
 
           today = datetime.utcnow().strftime('%d/%m/%Y')
-          status = "✅ Éxito" if count > 0 else "⚠️ Sin resultados"
+          status = "✅ Éxito" if total > 0 else "⚠️ Sin resultados"
 
           msg = (
               f"🤖 <b>AI Job Foundry — {today}</b>\n"
               f"{status}\n\n"
-              f"🔍 <b>{count}</b> jobs encontrados en LinkedIn\n"
+              f"🔍 <b>{total}</b> jobs encontrados\n"
+              f"  • LinkedIn: {linkedin_count}\n"
+              f"  • Indeed: {indeed_count}\n"
+              f"  • Computrabajo: {computrabajo_count}\n"
               f"📋 Modo: {mode.upper()}\n"
-              f"📊 Revisa Google Sheets → pestaña Staging\n\n"
+              f"📊 Revisa Google Sheets → pestañas LinkedIn / Indeed / Computrabajo\n\n"
               f"<i>Siguiente scraping: mañana 10am MX</i>"
           )
 
@@ -131,7 +145,7 @@ jobs:
                                         headers={"Content-Type": "application/json"})
           try:
               urllib.request.urlopen(req, timeout=10)
-              print(f"✅ Telegram enviado: {count} jobs")
+              print(f"✅ Telegram enviado: {total} jobs")
           except Exception as e:
               print(f"⚠️  Telegram error (no crítico): {e}")
           PYEOF

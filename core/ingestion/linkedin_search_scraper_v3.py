@@ -39,6 +39,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from core.sheets.sheet_manager import SheetManager
 from core.utils.linkedin_credentials import get_linkedin_credentials
+from core.ingestion.queries import get_mexico_queries, get_latam_queries
 
 # Colors
 GREEN = '\033[92m'
@@ -47,26 +48,9 @@ YELLOW = '\033[93m'
 CYAN = '\033[96m'
 END = '\033[0m'
 
-# ── Búsquedas con location=México (geoId LinkedIn para México)
-# Devuelve roles publicados para trabajadores en México
-QUERIES_MEXICO = [
-    "SAP Project Manager",
-    "ERP Implementation Manager",
-    "IT Manager",
-    "Digital Transformation Manager",
-    "Technology Consulting Manager",
-    "IT Business Partner",
-    "AI Project Manager",
-    "Technology Program Manager",
-    "Program Manager",
-    "Business Process Manager",
-]
-
-# ── Búsquedas globales con "LATAM" en keyword (ya auto-filtran)
-QUERIES_LATAM_GLOBAL = [
-    "IT Manager LATAM remote",
-    "Program Manager LATAM remote",
-    "SAP Consultant LATAM remote",
+LINKEDIN_HEADERS = [
+    'Role', 'Company', 'Location', 'ApplyURL',
+    'Source', 'SearchQuery', 'QuerySource', 'DateFound', 'Status', 'RemoteScope',
 ]
 
 # GeoId de México en LinkedIn
@@ -141,11 +125,11 @@ class LinkedInSearchScraper:
                     return
 
                 # Search Mexico-targeted queries
-                for query in QUERIES_MEXICO:
+                for query, query_source in get_mexico_queries("en"):
                     print(f"\n{CYAN}{'='*70}")
                     print(f"[MX] Searching: {query}")
                     print(f"{'='*70}{END}")
-                    jobs = await self.search_jobs(page, query, geo_id=MEXICO_GEO_ID)
+                    jobs = await self.search_jobs(page, query, geo_id=MEXICO_GEO_ID, query_source=query_source)
                     # Filter US-only
                     before = len(jobs)
                     jobs = [j for j in jobs if not self.is_us_only(j)]
@@ -157,11 +141,11 @@ class LinkedInSearchScraper:
                     await asyncio.sleep(3)
 
                 # Search LATAM global queries (no geo filter, keyword already filters)
-                for query in QUERIES_LATAM_GLOBAL:
+                for query, query_source in get_latam_queries("en"):
                     print(f"\n{CYAN}{'='*70}")
                     print(f"[LATAM] Searching: {query}")
                     print(f"{'='*70}{END}")
-                    jobs = await self.search_jobs(page, query, geo_id=None)
+                    jobs = await self.search_jobs(page, query, geo_id=None, query_source=query_source)
                     before = len(jobs)
                     jobs = [j for j in jobs if not self.is_us_only(j)]
                     filtered = before - len(jobs)
@@ -227,7 +211,7 @@ class LinkedInSearchScraper:
             print(f"{RED}Login error: {e}{END}")
             return False
 
-    async def search_jobs(self, page: Page, query: str, max_results=20, geo_id: str = None) -> list:
+    async def search_jobs(self, page: Page, query: str, max_results=20, geo_id: str = None, query_source: str = "") -> list:
         """
         Search for jobs with given query
 
@@ -335,14 +319,15 @@ class LinkedInSearchScraper:
                         url = url.split('?')[0]
 
                     job = {
-                        'Role': title.strip(),
-                        'Company': company.strip(),
-                        'Location': location.strip(),
-                        'ApplyURL': url,
-                        'Source': 'LinkedIn Search',
+                        'Role':        title.strip(),
+                        'Company':     company.strip(),
+                        'Location':    location.strip(),
+                        'ApplyURL':    url,
+                        'Source':      'LinkedIn Search',
                         'SearchQuery': query,
-                        'CreatedAt': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
-                        'Status': 'New',
+                        'QuerySource': query_source,
+                        'DateFound':   datetime.now().strftime('%Y-%m-%d'),
+                        'Status':      'New',
                         'RemoteScope': 'Remote'  # We filtered for remote
                     }
 
@@ -430,32 +415,20 @@ class LinkedInSearchScraper:
         print(f"{CYAN}{'='*70}{END}\n")
 
     def save_to_sheets(self):
-        """Save jobs to Google Sheets.
-
-        Strategy: jobs land in the 'Staging' tab first so Marcos can
-        review them before they enter the main LinkedIn pipeline.
-        Duplicates are checked against both Staging AND LinkedIn tabs.
-        """
-        print(f"\n{CYAN}Saving to Google Sheets (Staging tab)...{END}")
-
-        # Column order for the Staging tab — must be written as headers on first run
-        STAGING_HEADERS = [
-            'Role', 'Company', 'Location', 'ApplyURL',
-            'Source', 'SearchQuery', 'CreatedAt', 'Status', 'RemoteScope',
-        ]
+        """Save jobs to Google Sheets → LinkedIn tab."""
+        print(f"\n{CYAN}Saving to Google Sheets (LinkedIn tab)...{END}")
 
         try:
-            # Initialize Staging headers if the tab is blank (first-ever run)
-            self.sheet_manager.ensure_headers('staging', STAGING_HEADERS)
+            # Initialize LinkedIn headers if the tab is blank (first-ever run)
+            self.sheet_manager.ensure_headers('linkedin', LINKEDIN_HEADERS)
 
-            # Collect already-known URLs from both Staging and LinkedIn
+            # Collect already-known URLs from LinkedIn tab
             existing_urls: set = set()
-            for check_tab in ('staging', 'linkedin'):
-                try:
-                    rows = self.sheet_manager.get_all_jobs(tab=check_tab)
-                    existing_urls.update(j.get('ApplyURL', '') for j in rows)
-                except Exception:
-                    pass  # Tab may not exist yet — first run
+            try:
+                rows = self.sheet_manager.get_all_jobs(tab='linkedin')
+                existing_urls.update(j.get('ApplyURL', '') for j in rows)
+            except Exception:
+                pass  # Tab may not exist yet — first run
 
             # Only keep genuinely new jobs
             new_jobs = [
@@ -466,14 +439,14 @@ class LinkedInSearchScraper:
             print(f"  Total scraped:  {len(self.jobs_found)}")
             print(f"  Duplicates:     {len(self.jobs_found) - len(new_jobs)}")
             print(f"  New jobs:       {GREEN}{len(new_jobs)}{END}")
-            print(f"  Destination:    {CYAN}Staging tab{END} (revisar y promover a LinkedIn)")
+            print(f"  Destination:    {CYAN}LinkedIn tab{END}")
 
             if not new_jobs:
                 print(f"  {YELLOW}No hay jobs nuevos que guardar{END}")
                 return
 
             # ONE batch write — avoids the 60 writes/min quota (HTTP 429)
-            tab_name = self.sheet_manager.tabs['staging']
+            tab_name = self.sheet_manager.tabs['linkedin']
             headers  = self.sheet_manager._get_headers(tab_name)
             rows     = [[str(job.get(h, '') or '') for h in headers] for job in new_jobs]
 
@@ -482,6 +455,7 @@ class LinkedInSearchScraper:
                     spreadsheetId=self.sheet_manager.spreadsheet_id,
                     range=f"{tab_name}!A2",
                     valueInputOption="USER_ENTERED",
+                    insertDataOption="INSERT_ROWS",
                     body={"values": rows},
                 ).execute()
                 saved = len(rows)
@@ -489,9 +463,7 @@ class LinkedInSearchScraper:
                 print(f"    {RED}Batch write error: {e}{END}")
                 saved = 0
 
-            print(f"  {GREEN}Guardados {saved}/{len(new_jobs)} jobs en Staging{END}")
-            print(f"\n  {YELLOW}Próximo paso: revisa la pestaña 'Staging' en el Sheet,")
-            print(f"  mueve los que quieras a 'LinkedIn', y borra los demás.{END}")
+            print(f"  {GREEN}Guardados {saved}/{len(new_jobs)} jobs en LinkedIn tab{END}")
 
         except Exception as e:
             print(f"  {RED}Save error: {e}{END}")
