@@ -76,8 +76,9 @@ def main():
 
         async def run():
             scraper = LinkedInSearchScraper(headless=True)
-            jobs = await scraper.run(dry_run=dry_run)
-            return jobs
+            await scraper.run(dry_run=dry_run)
+            # run() no retorna jobs explícitamente — los guarda en scraper.jobs_found
+            return scraper.jobs_found or []
 
         jobs = asyncio.run(run())
 
