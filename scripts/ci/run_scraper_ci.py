@@ -72,10 +72,10 @@ def main():
 
     # Importar scraper y correr
     try:
-        from core.ingestion.linkedin_search_scraper_v3 import LinkedInSearchScraperV3
+        from core.ingestion.linkedin_search_scraper_v3 import LinkedInSearchScraper
 
         async def run():
-            scraper = LinkedInSearchScraperV3(headless=True)
+            scraper = LinkedInSearchScraper(headless=True)
             jobs = await scraper.run(dry_run=dry_run)
             return jobs
 
