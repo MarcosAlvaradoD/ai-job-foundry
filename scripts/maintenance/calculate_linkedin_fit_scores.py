@@ -116,38 +116,50 @@ Responde SOLO en JSON:
     if NVIDIA_KEY and "127.0.0.1" not in LLM_URL and "localhost" not in LLM_URL:
         headers["Authorization"] = f"Bearer {NVIDIA_KEY}"
 
-    try:
-        response = requests.post(
-            LLM_URL,
-            headers=headers,
-            json={
-                "model": LLM_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "temperature": 0.3,
-                "max_tokens": 300
-            },
-            timeout=30
-        )
+    import json as _json
 
-        if response.status_code != 200:
-            return {'fit_score': 5, 'why': f'AI unavailable (HTTP {response.status_code})', 'seniority': 'Unknown'}
-        
-        content = response.json()['choices'][0]['message']['content']
-        
-        import json
-        content = content.replace('```json', '').replace('```', '').strip()
-        result = json.loads(content)
-        
-        fit_score = min(10, max(0, int(result.get('fit_score', 5))))
-        
-        return {
-            'fit_score': fit_score,
-            'why': result.get('why', 'Analysis completed')[:200],
-            'seniority': result.get('seniority', 'Unknown')
-        }
-        
-    except Exception as e:
-        return {'fit_score': 5, 'why': f'Error: {str(e)[:100]}', 'seniority': 'Unknown'}
+    for attempt in range(4):  # hasta 3 reintentos en 429
+        try:
+            response = requests.post(
+                LLM_URL,
+                headers=headers,
+                json={
+                    "model": LLM_MODEL,
+                    "messages": [{"role": "user", "content": prompt}],
+                    "temperature": 0.3,
+                    "max_tokens": 300
+                },
+                timeout=30
+            )
+
+            # Rate limit — espera y reintenta
+            if response.status_code == 429:
+                wait = int(response.headers.get('Retry-After', 60))
+                wait = max(wait, 15)  # mínimo 15 s
+                print(f"   ⏳ Rate limit (429) — esperando {wait}s... (intento {attempt+1}/3)")
+                time.sleep(wait)
+                continue
+
+            if response.status_code != 200:
+                return {'fit_score': 5, 'why': f'AI unavailable (HTTP {response.status_code})', 'seniority': 'Unknown'}
+
+            content = response.json()['choices'][0]['message']['content']
+            content = content.replace('```json', '').replace('```', '').strip()
+            result = _json.loads(content)
+            fit_score = min(10, max(0, int(result.get('fit_score', 5))))
+            return {
+                'fit_score': fit_score,
+                'why': result.get('why', 'Analysis completed')[:200],
+                'seniority': result.get('seniority', 'Unknown')
+            }
+
+        except Exception as e:
+            if attempt < 3:
+                time.sleep(5)
+                continue
+            return {'fit_score': 5, 'why': f'Error: {str(e)[:100]}', 'seniority': 'Unknown'}
+
+    return {'fit_score': 5, 'why': 'AI unavailable (rate limit max retries)', 'seniority': 'Unknown'}
 
 
 def main():
@@ -227,8 +239,10 @@ def main():
             print(f"   ✅ Saved!")
             processed += 1
             
-            # Rate limit
-            time.sleep(1)
+            # Rate limit — NVIDIA NIM free tier: ~5 req/min → 13s entre requests
+            # Si usas Ollama local puedes bajar a 1s
+            sleep_secs = 2 if ("127.0.0.1" in LLM_URL or "localhost" in LLM_URL) else 13
+            time.sleep(sleep_secs)
             
         except Exception as e:
             print(f"   ❌ Error: {e}")
