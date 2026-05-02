@@ -23,9 +23,6 @@ load_dotenv(dotenv_path=env_path)
 
 SCOPES = [
     'https://www.googleapis.com/auth/spreadsheets',
-    'https://www.googleapis.com/auth/gmail.readonly',
-    'https://www.googleapis.com/auth/gmail.modify',
-    'https://www.googleapis.com/auth/gmail.labels'
 ]
 
 class SheetManager:
@@ -125,31 +122,52 @@ class SheetManager:
         return self._headers_cache[tab_name]
     
     def _get_credentials(self):
-        """Obtiene credenciales OAuth de Google"""
-        creds = None
-        # ✅ FIX: Usar rutas absolutas como en env_path
+        """Obtiene credenciales OAuth de Google.
+
+        Flujo:
+          1. Carga token.json si existe.
+          2. Si está vigente → úsalo (sin red).
+          3. Si expiró → intenta refresh silencioso.
+          4. Si el refresh falla (invalid_grant / revoked) → browser flow local.
+          5. En CI sin browser disponible el error queda claro en el log.
+        """
+        from google.auth.exceptions import RefreshError
+
         base_path = Path(__file__).parent.parent.parent
         token_path = base_path / "data" / "credentials" / "token.json"
         credentials_path = base_path / "data" / "credentials" / "credentials.json"
-        
-        # Token guardado previamente
-        if os.path.exists(token_path):
-            creds = Credentials.from_authorized_user_file(token_path, SCOPES)
-        
-        # Si no hay credenciales válidas, autenticar
-        if not creds or not creds.valid:
-            if creds and creds.expired and creds.refresh_token:
+
+        creds = None
+        if token_path.exists():
+            try:
+                creds = Credentials.from_authorized_user_file(str(token_path), SCOPES)
+            except Exception:
+                creds = None  # token corrupto — lo descartamos
+
+        if creds and creds.valid:
+            return creds  # ✅ token vigente, no hace nada
+
+        # Intentar refresh silencioso (solo si expiró pero refresh_token existe)
+        if creds and creds.expired and creds.refresh_token:
+            try:
                 creds.refresh(Request())
-            else:
-                flow = InstalledAppFlow.from_client_secrets_file(
-                    credentials_path, SCOPES
-                )
-                creds = flow.run_local_server(port=0)
-            
-            # Guardar credenciales
-            with open(token_path, 'w') as token:
-                token.write(creds.to_json())
-        
+                with open(token_path, 'w') as f:
+                    f.write(creds.to_json())
+                return creds  # ✅ refreshed OK
+            except RefreshError:
+                # refresh_token revocado → necesita re-auth completa
+                creds = None
+
+        # Re-auth completa (abre browser local; falla limpiamente en CI)
+        if not credentials_path.exists():
+            raise FileNotFoundError(
+                f"credentials.json no encontrado en {credentials_path}. "
+                "Descárgalo de Google Cloud Console."
+            )
+        flow = InstalledAppFlow.from_client_secrets_file(str(credentials_path), SCOPES)
+        creds = flow.run_local_server(port=0)
+        with open(token_path, 'w') as f:
+            f.write(creds.to_json())
         return creds
     
     def get_all_jobs(self, tab: str = "registry") -> List[Dict]:

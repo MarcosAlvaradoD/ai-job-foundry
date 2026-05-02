@@ -20,9 +20,42 @@ if sys.platform == "win32":
 
 load_dotenv()
 
-SHEET_ID = os.getenv("GOOGLE_SHEETS_ID")
-LLM_URL = os.getenv("LLM_URL", "http://127.0.0.1:11434/v1/chat/completions")
-LLM_MODEL = os.getenv("LLM_MODEL", "qwen2.5-14b-instruct")
+SHEET_ID   = os.getenv("GOOGLE_SHEETS_ID")
+NVIDIA_KEY = os.getenv("NVIDIA_API_KEY", "").strip().strip('"').strip("'")
+
+# Auto-selección de backend (prioridad: Ollama local → NVIDIA NIM):
+#   1) Si LLM_URL está explícitamente en .env → úsala tal cual
+#   2) Si Ollama está corriendo en localhost:11434 → úsalo (gratis, privado)
+#   3) Si Ollama no responde Y NVIDIA_API_KEY tiene valor → NVIDIA NIM (nube)
+#   4) Si ninguno → Ollama de todas formas (fallará con mensaje claro)
+
+def _detect_backend():
+    """Detecta si Ollama está corriendo; si no, cae a NVIDIA NIM."""
+    # Si el usuario fijó LLM_URL manualmente en .env, respetarlo
+    explicit_url = os.getenv("LLM_URL", "")
+    if explicit_url:
+        model = os.getenv("LLM_MODEL", "qwen2.5-14b-instruct")
+        return explicit_url, model
+
+    # Intentar Ollama local (timeout corto para no bloquear)
+    try:
+        r = requests.get("http://127.0.0.1:11434/api/tags", timeout=3)
+        if r.status_code == 200:
+            return ("http://127.0.0.1:11434/v1/chat/completions",
+                    os.getenv("LLM_MODEL", "qwen2.5-14b-instruct"))
+    except Exception:
+        pass
+
+    # Fallback: NVIDIA NIM si hay key
+    if NVIDIA_KEY:
+        return ("https://integrate.api.nvidia.com/v1/chat/completions",
+                "meta/llama-3.3-70b-instruct")
+
+    # Último recurso: Ollama (fallará con mensaje de error claro)
+    return ("http://127.0.0.1:11434/v1/chat/completions",
+            os.getenv("LLM_MODEL", "qwen2.5-14b-instruct"))
+
+LLM_URL, LLM_MODEL = _detect_backend()
 
 CV_TEXT = """
 CANDIDATE: Marcos Alberto Alvarado de la Torre
@@ -78,9 +111,15 @@ Responde SOLO en JSON:
   "seniority": "Mid-Level | Senior | Lead"
 }}"""
     
+    # Auth header: solo si hay API key (NVIDIA NIM / OpenAI) — Ollama local no lo necesita
+    headers = {"Content-Type": "application/json"}
+    if NVIDIA_KEY and "127.0.0.1" not in LLM_URL and "localhost" not in LLM_URL:
+        headers["Authorization"] = f"Bearer {NVIDIA_KEY}"
+
     try:
         response = requests.post(
             LLM_URL,
+            headers=headers,
             json={
                 "model": LLM_MODEL,
                 "messages": [{"role": "user", "content": prompt}],
@@ -89,9 +128,9 @@ Responde SOLO en JSON:
             },
             timeout=30
         )
-        
+
         if response.status_code != 200:
-            return {'fit_score': 5, 'why': 'AI unavailable', 'seniority': 'Unknown'}
+            return {'fit_score': 5, 'why': f'AI unavailable (HTTP {response.status_code})', 'seniority': 'Unknown'}
         
         content = response.json()['choices'][0]['message']['content']
         
@@ -115,8 +154,13 @@ def main():
     print("\n" + "="*70)
     print("🎯 CALCULATE FIT SCORES - LINKEDIN TAB")
     print("="*70)
-    print(f"Sheet: {SHEET_ID}")
-    print(f"LLM: {LLM_URL}")
+    backend = ("NVIDIA NIM (nube)" if "nvidia" in LLM_URL
+               else "Ollama local" if "127.0.0.1" in LLM_URL or "localhost" in LLM_URL
+               else "API externa")
+    print(f"Sheet:   {SHEET_ID}")
+    print(f"Backend: {backend}")
+    print(f"LLM URL: {LLM_URL}")
+    print(f"Model:   {LLM_MODEL}")
     print("="*70 + "\n")
     
     sheet_manager = SheetManager()
@@ -135,15 +179,18 @@ def main():
     
     print(f"✅ Found {len(jobs)} total jobs\n")
     
-    # Filter: NO FIT score
+    # Filter: sin score O score fallido anteriormente ("AI unavailable" / "Error:")
     pending = []
     for j in jobs:
         fit = j.get('FitScore')
-        if not fit or fit == 0 or fit == '' or str(fit).strip() == '':
+        why = str(j.get('Why', ''))
+        no_score  = not fit or fit == 0 or str(fit).strip() == ''
+        bad_score = 'AI unavailable' in why or why.startswith('Error:')
+        if no_score or bad_score:
             pending.append(j)
-    
+
     if not pending:
-        print("✅ All jobs have FIT scores!")
+        print("✅ All jobs have valid FIT scores!")
         return
     
     print(f"📋 {len(pending)} jobs need FIT scores\n")
