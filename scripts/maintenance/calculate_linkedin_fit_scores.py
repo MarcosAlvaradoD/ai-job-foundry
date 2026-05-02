@@ -180,9 +180,11 @@ def _call_backend(backend: dict, prompt: str) -> dict | None:
         content = response.json()["choices"][0]["message"]["content"]
         content = content.replace("```json", "").replace("```", "").strip()
         result  = _json.loads(content)
+        # Incluir nombre del backend en Why para detectar scores de Ollama
+        why_raw = result.get("why", "Analysis completed")[:180]
         return {
             "fit_score": min(10, max(0, int(result.get("fit_score", 5)))),
-            "why":       result.get("why", "Analysis completed")[:200],
+            "why":       f"[{backend['name']}] {why_raw}",
             "seniority": result.get("seniority", "Unknown"),
         }
 
@@ -265,14 +267,15 @@ def main():
     
     print(f"✅ Found {len(jobs)} total jobs\n")
     
-    # Filter: sin score O score fallido anteriormente ("AI unavailable" / "Error:")
+    # Filter: sin score, score fallido, o generado por Ollama (no confiable)
     pending = []
     for j in jobs:
         fit = j.get('FitScore')
         why = str(j.get('Why', ''))
-        no_score  = not fit or fit == 0 or str(fit).strip() == ''
-        bad_score = 'AI unavailable' in why or why.startswith('Error:')
-        if no_score or bad_score:
+        no_score    = not fit or fit == 0 or str(fit).strip() == ''
+        bad_score   = 'AI unavailable' in why or why.startswith('Error:')
+        ollama_score = '[Ollama local]' in why  # Ollama da scores genéricos, re-procesar
+        if no_score or bad_score or ollama_score:
             pending.append(j)
 
     if not pending:
