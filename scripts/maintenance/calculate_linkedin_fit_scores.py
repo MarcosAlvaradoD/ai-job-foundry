@@ -20,42 +20,98 @@ if sys.platform == "win32":
 
 load_dotenv()
 
-SHEET_ID   = os.getenv("GOOGLE_SHEETS_ID")
-NVIDIA_KEY = os.getenv("NVIDIA_API_KEY", "").strip().strip('"').strip("'")
+import json as _json
 
-# Auto-selección de backend (prioridad: Ollama local → NVIDIA NIM):
-#   1) Si LLM_URL está explícitamente en .env → úsala tal cual
-#   2) Si Ollama está corriendo en localhost:11434 → úsalo (gratis, privado)
-#   3) Si Ollama no responde Y NVIDIA_API_KEY tiene valor → NVIDIA NIM (nube)
-#   4) Si ninguno → Ollama de todas formas (fallará con mensaje claro)
+SHEET_ID    = os.getenv("GOOGLE_SHEETS_ID")
+NVIDIA_KEY  = os.getenv("NVIDIA_API_KEY",  "").strip().strip('"').strip("'")
+GEMINI_KEY  = os.getenv("GEMINI_API_KEY",  "").strip().strip('"').strip("'")
 
-def _detect_backend():
-    """Detecta si Ollama está corriendo; si no, cae a NVIDIA NIM."""
-    # Si el usuario fijó LLM_URL manualmente en .env, respetarlo
-    explicit_url = os.getenv("LLM_URL", "")
-    if explicit_url:
-        model = os.getenv("LLM_MODEL", "qwen2.5-14b-instruct")
-        return explicit_url, model
+# ─────────────────────────────────────────────────────────────────────
+# MULTI-BACKEND con fallback automático
+#
+# Prioridad de uso (de más rápido/barato a más lento):
+#   1. LLM_URL explícita en .env   → solo ese backend (override manual)
+#   2. Gemini Flash (gratis ~15 rpm, OpenAI-compatible)
+#   3. NVIDIA NIM (~5 rpm, gratis con key)
+#   4. Ollama local (sin límite, privado)
+#
+# Cuando un backend devuelve 429 se salta al siguiente
+# automáticamente sin interrumpir el batch.
+# ─────────────────────────────────────────────────────────────────────
 
-    # Intentar Ollama local (timeout corto para no bloquear)
+def _build_backends() -> list:
+    """Construye la lista ordenada de backends disponibles."""
+    # Override manual: si LLM_URL está en .env, usar solo ese
+    explicit = os.getenv("LLM_URL", "").strip()
+    if explicit:
+        key = NVIDIA_KEY if "nvidia" in explicit else (
+              GEMINI_KEY  if "google"  in explicit else None)
+        return [{"name": "Custom", "url": explicit,
+                 "model": os.getenv("LLM_MODEL", "gpt-4o-mini"), "key": key}]
+
+    backends = []
+
+    # 1️⃣  Gemini (OpenAI-compatible endpoint)
+    if GEMINI_KEY:
+        backends.append({
+            "name":  "Gemini Flash",
+            "url":   "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+            "model": "gemini-2.0-flash",
+            "key":   GEMINI_KEY,
+        })
+
+    # 2️⃣  NVIDIA NIM
+    if NVIDIA_KEY:
+        backends.append({
+            "name":  "NVIDIA NIM",
+            "url":   "https://integrate.api.nvidia.com/v1/chat/completions",
+            "model": "meta/llama-3.3-70b-instruct",
+            "key":   NVIDIA_KEY,
+        })
+
+    # 3️⃣  Ollama local (solo si responde)
     try:
         r = requests.get("http://127.0.0.1:11434/api/tags", timeout=3)
         if r.status_code == 200:
-            return ("http://127.0.0.1:11434/v1/chat/completions",
-                    os.getenv("LLM_MODEL", "qwen2.5-14b-instruct"))
+            backends.append({
+                "name":  "Ollama local",
+                "url":   "http://127.0.0.1:11434/v1/chat/completions",
+                "model": os.getenv("LLM_MODEL", "qwen2.5-14b-instruct"),
+                "key":   None,
+            })
     except Exception:
         pass
 
-    # Fallback: NVIDIA NIM si hay key
-    if NVIDIA_KEY:
-        return ("https://integrate.api.nvidia.com/v1/chat/completions",
-                "meta/llama-3.3-70b-instruct")
+    if not backends:
+        # Sin configuración válida — Ollama como último recurso (fallará claro)
+        backends.append({
+            "name":  "Ollama local (sin config)",
+            "url":   "http://127.0.0.1:11434/v1/chat/completions",
+            "model": os.getenv("LLM_MODEL", "qwen2.5-14b-instruct"),
+            "key":   None,
+        })
 
-    # Último recurso: Ollama (fallará con mensaje de error claro)
-    return ("http://127.0.0.1:11434/v1/chat/completions",
-            os.getenv("LLM_MODEL", "qwen2.5-14b-instruct"))
+    return backends
 
-LLM_URL, LLM_MODEL = _detect_backend()
+# Lista mutable: cuando un backend da 429 definitivo se mueve al final
+BACKENDS: list = _build_backends()
+
+# Backend activo (índice 0 siempre es el actual)
+def _active_backend() -> dict:
+    return BACKENDS[0]
+
+def _rotate_backend(reason: str = "429"):
+    """Mueve el backend actual al final y activa el siguiente."""
+    if len(BACKENDS) > 1:
+        exhausted = BACKENDS.pop(0)
+        print(f"   🔄 Backend '{exhausted['name']}' agotado ({reason}) → usando '{BACKENDS[0]['name']}'")
+        BACKENDS.append(exhausted)  # lo pone al final por si se recupera
+    else:
+        print(f"   ⚠️  Solo hay 1 backend disponible, no se puede rotar.")
+
+# Para el resumen del header
+LLM_URL   = _active_backend()["url"]
+LLM_MODEL = _active_backend()["model"]
 
 CV_TEXT = """
 CANDIDATE: Marcos Alberto Alvarado de la Torre
@@ -81,12 +137,65 @@ PRIORITIES:
 - Leadership roles
 """
 
+def _call_backend(backend: dict, prompt: str) -> dict | None:
+    """
+    Llama a un backend LLM. Devuelve el resultado o None si hay 429
+    (para que el llamador rote al siguiente backend).
+    """
+    headers = {"Content-Type": "application/json"}
+    if backend["key"]:
+        headers["Authorization"] = f"Bearer {backend['key']}"
+
+    try:
+        response = requests.post(
+            backend["url"],
+            headers=headers,
+            json={
+                "model": backend["model"],
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.3,
+                "max_tokens": 300,
+            },
+            timeout=30,
+        )
+
+        if response.status_code == 429:
+            return None  # señal para rotar backend
+
+        # Key expirada / inválida → rotar (None = rotar al siguiente)
+        if response.status_code in (400, 401, 403):
+            try:
+                err_body = response.json()
+                err_msg  = str(err_body).lower()
+            except Exception:
+                err_msg = response.text.lower()
+            if any(w in err_msg for w in ("expired", "invalid", "unauthorized", "forbidden", "api key")):
+                return None  # señal para rotar backend
+
+        if response.status_code != 200:
+            return {"fit_score": 5,
+                    "why": f"AI unavailable (HTTP {response.status_code})",
+                    "seniority": "Unknown"}
+
+        content = response.json()["choices"][0]["message"]["content"]
+        content = content.replace("```json", "").replace("```", "").strip()
+        result  = _json.loads(content)
+        return {
+            "fit_score": min(10, max(0, int(result.get("fit_score", 5)))),
+            "why":       result.get("why", "Analysis completed")[:200],
+            "seniority": result.get("seniority", "Unknown"),
+        }
+
+    except Exception as e:
+        return {"fit_score": 5, "why": f"Error: {str(e)[:100]}", "seniority": "Unknown"}
+
+
 def analyze_with_ai(job_data: dict) -> dict:
-    """Analiza job con IA"""
-    role = job_data.get('Role', 'Unknown')
-    company = job_data.get('Company', 'Unknown')
-    location = job_data.get('Location', 'Unknown')
-    
+    """Analiza job con IA usando multi-backend con fallback automático en 429."""
+    role     = job_data.get("Role",     "Unknown")
+    company  = job_data.get("Company",  "Unknown")
+    location = job_data.get("Location", "Unknown")
+
     prompt = f"""Eres un experto en análisis de ofertas laborales.
 
 CANDIDATO:
@@ -110,69 +219,34 @@ Responde SOLO en JSON:
   "why": "Razón breve",
   "seniority": "Mid-Level | Senior | Lead"
 }}"""
-    
-    # Auth header: solo si hay API key (NVIDIA NIM / OpenAI) — Ollama local no lo necesita
-    headers = {"Content-Type": "application/json"}
-    if NVIDIA_KEY and "127.0.0.1" not in LLM_URL and "localhost" not in LLM_URL:
-        headers["Authorization"] = f"Bearer {NVIDIA_KEY}"
 
-    import json as _json
+    # Intentar con cada backend; rotar en 429
+    attempts_per_backend = 2
+    tried = 0
+    while tried < len(BACKENDS) * attempts_per_backend:
+        backend = _active_backend()
+        result  = _call_backend(backend, prompt)
 
-    for attempt in range(4):  # hasta 3 reintentos en 429
-        try:
-            response = requests.post(
-                LLM_URL,
-                headers=headers,
-                json={
-                    "model": LLM_MODEL,
-                    "messages": [{"role": "user", "content": prompt}],
-                    "temperature": 0.3,
-                    "max_tokens": 300
-                },
-                timeout=30
-            )
+        if result is None:
+            # 429 → rotar al siguiente backend sin esperar
+            _rotate_backend("429")
+            tried += 1
+            continue
 
-            # Rate limit — espera y reintenta
-            if response.status_code == 429:
-                wait = int(response.headers.get('Retry-After', 60))
-                wait = max(wait, 15)  # mínimo 15 s
-                print(f"   ⏳ Rate limit (429) — esperando {wait}s... (intento {attempt+1}/3)")
-                time.sleep(wait)
-                continue
+        return result
 
-            if response.status_code != 200:
-                return {'fit_score': 5, 'why': f'AI unavailable (HTTP {response.status_code})', 'seniority': 'Unknown'}
-
-            content = response.json()['choices'][0]['message']['content']
-            content = content.replace('```json', '').replace('```', '').strip()
-            result = _json.loads(content)
-            fit_score = min(10, max(0, int(result.get('fit_score', 5))))
-            return {
-                'fit_score': fit_score,
-                'why': result.get('why', 'Analysis completed')[:200],
-                'seniority': result.get('seniority', 'Unknown')
-            }
-
-        except Exception as e:
-            if attempt < 3:
-                time.sleep(5)
-                continue
-            return {'fit_score': 5, 'why': f'Error: {str(e)[:100]}', 'seniority': 'Unknown'}
-
-    return {'fit_score': 5, 'why': 'AI unavailable (rate limit max retries)', 'seniority': 'Unknown'}
+    return {"fit_score": 5, "why": "AI unavailable (all backends exhausted)", "seniority": "Unknown"}
 
 
 def main():
     print("\n" + "="*70)
     print("🎯 CALCULATE FIT SCORES - LINKEDIN TAB")
     print("="*70)
-    backend = ("NVIDIA NIM (nube)" if "nvidia" in LLM_URL
-               else "Ollama local" if "127.0.0.1" in LLM_URL or "localhost" in LLM_URL
-               else "API externa")
     print(f"Sheet:   {SHEET_ID}")
-    print(f"Backend: {backend}")
-    print(f"LLM URL: {LLM_URL}")
-    print(f"Model:   {LLM_MODEL}")
+    print(f"Backends disponibles ({len(BACKENDS)}):")
+    for i, b in enumerate(BACKENDS):
+        marker = "▶" if i == 0 else " "
+        print(f"  {marker} [{i+1}] {b['name']} — {b['model']}")
     print("="*70 + "\n")
     
     sheet_manager = SheetManager()
@@ -239,9 +313,14 @@ def main():
             print(f"   ✅ Saved!")
             processed += 1
             
-            # Rate limit — NVIDIA NIM free tier: ~5 req/min → 13s entre requests
-            # Si usas Ollama local puedes bajar a 1s
-            sleep_secs = 2 if ("127.0.0.1" in LLM_URL or "localhost" in LLM_URL) else 13
+            # Sleep dinámico según el backend activo
+            active_url = _active_backend()["url"]
+            if "127.0.0.1" in active_url or "localhost" in active_url:
+                sleep_secs = 2   # Ollama local — sin límite
+            elif "google" in active_url:
+                sleep_secs = 4   # Gemini — 15 rpm → 4s entre requests
+            else:
+                sleep_secs = 13  # NVIDIA NIM — ~5 rpm → 13s entre requests
             time.sleep(sleep_secs)
             
         except Exception as e:
