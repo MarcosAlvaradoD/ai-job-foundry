@@ -102,104 +102,196 @@ class LinkedInAutoApplyV3:
             return False
     
     def login_to_linkedin(self, page):
-        """Perform automatic login to LinkedIn"""
+        """
+        Login a LinkedIn usando credenciales del .env.
+        Usa wait_for_selector() con múltiples selectores fallback
+        para no depender de un solo selector que LinkedIn puede cambiar.
+        """
         try:
             if not self.linkedin_email or not self.linkedin_password:
                 print("[ERROR] LinkedIn credentials not configured in .env")
                 return False
-            
+
             print("\n[LOGIN] Starting automatic LinkedIn login...")
             print(f"[INFO] Email: {self.linkedin_email}")
-            
-            # Go to login page
+
             page.goto('https://www.linkedin.com/login', timeout=30000)
-            time.sleep(2)
-            
-            # Fill email
-            email_input = page.query_selector('#username')
-            if not email_input:
-                print("[ERROR] Email input field not found")
+
+            # Esperar a que la página termine de cargar completamente
+            try:
+                page.wait_for_load_state('networkidle', timeout=10000)
+            except Exception:
+                pass  # continuar igual si timeout
+
+            # ── Descartar popups de cookies / consent ──────────────────────
+            DISMISS_SELECTORS = [
+                'button[action-type="ACCEPT"]',
+                'button:has-text("Accept")',
+                'button:has-text("Aceptar")',
+                'button:has-text("Reject")',
+                'button:has-text("Allow all")',
+                '[data-test-id="accept-btn"]',
+            ]
+            for dsel in DISMISS_SELECTORS:
+                try:
+                    btn = page.query_selector(dsel)
+                    if btn and btn.is_visible():
+                        btn.click()
+                        time.sleep(1)
+                        print(f"[OK] Consent popup dismissed: {dsel}")
+                        break
+                except Exception:
+                    pass
+
+            # ── Email field ──────────────────────────────────────────────────
+            EMAIL_SELECTORS = [
+                '#username',
+                'input[name="session_key"]',
+                'input[type="email"]',
+                'input[autocomplete="username"]',
+                'input[autocomplete="email"]',
+            ]
+            # Debug: ver qué página tenemos exactamente
+            print(f"[DEBUG] URL pre-login: {page.url}")
+            print(f"[DEBUG] Title: {page.title()}")
+
+            # Verificar/esperar que #username sea visible (con fallback a query_selector)
+            email_el = None
+            for attempt in range(3):
+                try:
+                    email_el = page.wait_for_selector('#username', state='visible', timeout=6000)
+                    if email_el:
+                        print(f"[OK] #username visible (intento {attempt+1})")
+                        break
+                except Exception:
+                    # Si no aparece, probar scroll y esperar un poco más
+                    try:
+                        page.evaluate("window.scrollTo(0,200)")
+                        time.sleep(1)
+                    except Exception:
+                        pass
+
+            if not email_el:
+                # Buscar el primer input de email/session_key que sea VISIBLE
+                # (LinkedIn renderiza 2 forms: uno oculto SSO y uno visible)
+                try:
+                    for sel in ('input[name="session_key"]', 'input[type="email"]'):
+                        for el in page.query_selector_all(sel):
+                            if el.is_visible():
+                                email_el = el
+                                print(f"[OK] Email visible encontrado via: {sel}")
+                                break
+                        if email_el:
+                            break
+                except Exception:
+                    pass
+
+            if not email_el:
+                print(f"[ERROR] No se encontró campo email. URL: {page.url}")
+                # Debug inputs
+                try:
+                    for inp in page.query_selector_all('input')[:8]:
+                        print(f"  input type={inp.get_attribute('type')} "
+                              f"id={inp.get_attribute('id')} vis={inp.is_visible()}")
+                except Exception:
+                    pass
                 return False
-            
-            email_input.fill(self.linkedin_email)
-            time.sleep(0.5)
-            print("[OK] Email entered")
-            
-            # Fill password
-            password_input = page.query_selector('#password')
-            if not password_input:
-                print("[ERROR] Password input field not found")
+
+            # Limpiar + llenar con click → fill (API estándar, sin force)
+            email_el.click()
+            email_el.fill(self.linkedin_email)
+            print(f"[OK] Email ingresado")
+
+            # ── Password ─────────────────────────────────────────────────────
+            pwd_el = None
+            try:
+                pwd_el = page.wait_for_selector('#password', state='visible', timeout=4000)
+            except Exception:
+                # Buscar el primer input password VISIBLE (puede haber varios ocultos)
+                try:
+                    for el in page.query_selector_all('input[type="password"]'):
+                        if el.is_visible():
+                            pwd_el = el
+                            print("[OK] Password visible encontrado via query_selector_all")
+                            break
+                except Exception:
+                    pass
+
+            if not pwd_el:
+                print("[ERROR] Campo password no encontrado")
                 return False
-            
-            password_input.fill(self.linkedin_password)
-            time.sleep(0.5)
-            print("[OK] Password entered")
-            
-            # Click login button
-            login_button = page.query_selector('button[type="submit"]')
-            if not login_button:
-                print("[ERROR] Login button not found")
+
+            pwd_el.click()
+            pwd_el.fill(self.linkedin_password)
+            print("[OK] Password ingresado")
+
+            # ── Submit — Enter en password (evita clickar SSO buttons) ───────
+            try:
+                pwd_el.press('Enter')
+                print("[OK] Login submitted (Enter)")
+            except Exception as e:
+                print(f"[ERROR] Submit: {e}")
                 return False
-            
-            login_button.click()
-            print("[CLICK] Login button pressed")
-            
-            # Wait for navigation
-            time.sleep(5)
-            
-            # Check for verification challenges
-            if '/checkpoint' in page.url or '/challenge' in page.url:
+
+            print("[CLICK] Login submitted — waiting for navigation...")
+
+            # Esperar que cargue feed o challenge (max 15s)
+            try:
+                page.wait_for_url(
+                    lambda url: '/feed' in url or '/checkpoint' in url or '/challenge' in url,
+                    timeout=15000,
+                )
+            except Exception:
+                pass  # si no redirigió, revisamos URL igual
+
+            # ── Challenge / CAPTCHA ──────────────────────────────────────────
+            if any(k in page.url for k in ('/checkpoint', '/challenge', '/uas/login-captcha')):
                 print("\n" + "="*70)
-                print("[SECURITY] LinkedIn requires verification!")
-                print("[ACTION] Please complete the security check manually in the browser")
-                print("[INFO] Script will wait 60 seconds for you to complete verification...")
+                print("[SECURITY] LinkedIn requiere verificación manual!")
+                print("[ACTION] Completa el check en el browser — esperando 90s...")
                 print("="*70 + "\n")
-                
-                # Wait for manual verification
-                start_time = time.time()
-                while time.time() - start_time < 60:
+                start = time.time()
+                while time.time() - start < 90:
                     time.sleep(3)
                     if '/feed' in page.url:
-                        print("[SUCCESS] Verification completed!")
+                        print("[SUCCESS] Verificación completada!")
                         return True
-                
-                if '/feed' not in page.url:
-                    print("[ERROR] Verification timeout - please try again")
-                    return False
-            
-            # Verify successful login
-            if '/feed' in page.url:
-                print("[SUCCESS] Login successful!")
-                return True
-            else:
-                print(f"[ERROR] Login failed - unexpected URL: {page.url}")
+                print("[ERROR] Timeout de verificación (90s)")
                 return False
-                
-        except Exception as e:
-            print(f"[ERROR] Login failed: {e}")
+
+            if '/feed' in page.url:
+                print("[SUCCESS] Login exitoso!")
+                return True
+
+            print(f"[ERROR] Login falló — URL inesperada: {page.url}")
             return False
-    
+
+        except Exception as e:
+            print(f"[ERROR] Login exception: {e}")
+            return False
+
     def ensure_linkedin_session(self, context, page):
-        """Ensure we have a valid LinkedIn session"""
+        """
+        Establece sesión LinkedIn.
+        Estrategia: credenciales .env (primario) con cookies locales como caché.
+        Si hay cookies y ya estamos logueados, las usamos para ahorra un login.
+        Si no, siempre hacemos login con email/password del .env.
+        """
         print("\n[SESSION] Checking LinkedIn session...")
-        
-        # Try loading saved cookies first
-        cookies_loaded = self.load_cookies(context)
-        
-        # Check if logged in
+
+        # Intentar cachear sesión con cookies (evita login si ya está activa)
+        self.load_cookies(context)
+
         if self.is_logged_in(page):
-            print("[OK] Valid session active")
-            # Save cookies for next time if we just logged in
-            if not cookies_loaded:
-                self.save_cookies(context)
+            print("[OK] Sesión activa (cookies válidas)")
             return True
-        
-        # Not logged in - attempt auto-login
+
+        # Cookies expiradas o no existen → login con credenciales .env
+        print("[INFO] Sesión inválida — iniciando login con credenciales .env...")
         if self.login_to_linkedin(page):
-            # Save cookies after successful login
-            self.save_cookies(context)
+            self.save_cookies(context)  # guardar cookies frescas para la próxima vez
             return True
-        
+
         print("[ERROR] Could not establish LinkedIn session")
         return False
     

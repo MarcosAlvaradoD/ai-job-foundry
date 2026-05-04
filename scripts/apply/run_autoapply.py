@@ -27,6 +27,8 @@ import time
 import json
 import os
 import re
+import logging
+import urllib.request
 from pathlib import Path
 from datetime import datetime
 
@@ -43,6 +45,112 @@ try:
     HAS_PSYCOPG2 = True
 except ImportError:
     HAS_PSYCOPG2 = False
+
+# ── Logging a archivo ─────────────────────────────────────────────────────────
+_LOG_DIR = Path(__file__).parent.parent.parent / "logs"
+
+def setup_logging() -> logging.Logger:
+    """Configura logger dual: consola + archivo logs/autoapply_YYYYMMDD.log"""
+    _LOG_DIR.mkdir(exist_ok=True)
+    log_file = _LOG_DIR / f"autoapply_{datetime.now().strftime('%Y%m%d')}.log"
+
+    logger = logging.getLogger("autoapply")
+    logger.setLevel(logging.INFO)
+    if logger.handlers:
+        return logger  # ya inicializado
+
+    fmt = logging.Formatter("%(asctime)s [%(levelname)s] %(message)s",
+                             datefmt="%H:%M:%S")
+    # Archivo
+    fh = logging.FileHandler(log_file, encoding="utf-8")
+    fh.setFormatter(fmt)
+    logger.addHandler(fh)
+    # Consola
+    ch = logging.StreamHandler(sys.stdout)
+    ch.setFormatter(fmt)
+    logger.addHandler(ch)
+
+    logger.info(f"Log iniciado: {log_file}")
+    return logger
+
+log = setup_logging()
+
+# ── Telegram helper ───────────────────────────────────────────────────────────
+def send_telegram(msg: str, parse_mode: str = "HTML") -> bool:
+    """Envía mensaje a Telegram. Retorna True si OK, False si falla (no crítico)."""
+    token   = os.getenv("TELEGRAM_BOT_TOKEN", "")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID", "")
+    if not token or not chat_id:
+        return False
+    try:
+        url  = f"https://api.telegram.org/bot{token}/sendMessage"
+        data = json.dumps({"chat_id": chat_id, "text": msg,
+                           "parse_mode": parse_mode}).encode()
+        req  = urllib.request.Request(url, data=data,
+                                      headers={"Content-Type": "application/json"})
+        urllib.request.urlopen(req, timeout=10)
+        return True
+    except Exception as e:
+        log.warning(f"Telegram error (no crítico): {e}")
+        return False
+
+# ── Screenshot helper ─────────────────────────────────────────────────────────
+_SS_DIR = _LOG_DIR / "screenshots"
+
+def take_screenshot(page, label: str) -> str:
+    """Guarda screenshot en logs/screenshots/. Retorna la ruta o ''."""
+    try:
+        _SS_DIR.mkdir(parents=True, exist_ok=True)
+        fname = _SS_DIR / f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{label[:40]}.png"
+        page.screenshot(path=str(fname), full_page=False)
+        log.info(f"Screenshot: {fname.name}")
+        return str(fname)
+    except Exception as e:
+        log.warning(f"Screenshot falló: {e}")
+        return ""
+
+# ── CAPTCHA detection ─────────────────────────────────────────────────────────
+CAPTCHA_SIGNALS = (
+    '/checkpoint', '/challenge', '/uas/login-captcha',
+    'recaptcha', 'captcha', 'verify you', 'are you human',
+)
+
+def is_captcha_page(page) -> bool:
+    """Detecta si la página actual es un CAPTCHA / challenge de LinkedIn."""
+    url_lower   = page.url.lower()
+    title_lower = page.title().lower()
+    return any(s in url_lower or s in title_lower for s in CAPTCHA_SIGNALS)
+
+def handle_captcha(page, job: dict) -> bool:
+    """
+    Notifica por Telegram y espera hasta 3 minutos a que el usuario
+    resuelva el CAPTCHA manualmente. Retorna True si se resolvió.
+    """
+    company = job.get('Company', 'Unknown')
+    role    = job.get('Role', 'Unknown')
+    ss_path = take_screenshot(page, f"captcha_{company[:20]}")
+
+    msg = (
+        f"⚠️ <b>Auto-Apply — CAPTCHA detectado</b>\n\n"
+        f"Job: <b>{company}</b> — {role}\n"
+        f"URL: {page.url[:80]}\n\n"
+        f"Resuelve el CAPTCHA en el browser.\n"
+        f"Esperando <b>3 minutos</b>..."
+    )
+    send_telegram(msg)
+    log.warning(f"CAPTCHA detectado en {company} — esperando resolución manual (180s)...")
+
+    start = time.time()
+    while time.time() - start < 180:
+        time.sleep(5)
+        if not is_captcha_page(page):
+            log.info("CAPTCHA resuelto — continuando")
+            send_telegram("✅ <b>CAPTCHA resuelto</b> — continuando aplicaciones.")
+            return True
+
+    log.error("CAPTCHA no resuelto en 3 minutos — saltando este job")
+    send_telegram("❌ <b>CAPTCHA timeout</b> — job saltado, continuando con el siguiente.")
+    return False
 
 
 # ── tasks_queue helpers ───────────────────────────────────────────────────────
@@ -122,6 +230,15 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
     try:
         page.goto(url, timeout=30000)
         time.sleep(3)
+
+        # ── CAPTCHA check inmediato post-navegación ──────────────────────────
+        if is_captcha_page(page):
+            resolved = handle_captcha(page, job)
+            if not resolved:
+                return False, "CAPTCHA no resuelto"
+            # Volver a la URL del job tras resolver
+            page.goto(url, timeout=30000)
+            time.sleep(3)
 
         # Check for Easy Apply button
         easy_apply = page.query_selector('button:has-text("Easy Apply")')
@@ -218,11 +335,15 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
 
                 if submitted:
                     print("  [SUCCESS] Application submitted!")
+                    ss = take_screenshot(page, f"applied_{company[:25]}")
+                    log.info(f"Aplicado: {company} — {role} | screenshot: {ss or 'N/A'}")
                     return True, "Applied"
                 else:
                     # Check if we're on a confirmation page
                     if 'linkedin.com' in page.url:
                         print("  [SUCCESS?] Submit clicked — verifying...")
+                        ss = take_screenshot(page, f"applied_verify_{company[:20]}")
+                        log.info(f"Aplicado (verify): {company} — {role}")
                         return True, "Applied (verify)"
                     return False, "Submit clicked but unconfirmed"
 
@@ -358,9 +479,16 @@ def main():
             browser.close()
             return
 
-        print("\n[OK] LinkedIn session active — starting applications...\n")
+        log.info("LinkedIn session active — starting applications...")
+
+        applied_jobs = []   # para el resumen de Telegram
+        error_jobs   = []
 
         for job in jobs_to_process:
+            company = job.get('Company', 'Unknown')
+            role    = job.get('Role', 'Unknown')
+            fit     = job.get('FitScore', '?')
+
             ok, reason = apply_to_job_with_submit(
                 applier, job, page,
                 submit=args.submit,
@@ -369,38 +497,60 @@ def main():
 
             if ok and args.submit:
                 results['applied'] += 1
-                # Only update sheet when we have a valid row (not direct --job-id mode)
+                applied_jobs.append(f"• {company} — {role} (FIT {fit})")
                 if job.get('_row', 0) > 0:
                     update_sheet_status(applier.sheet_manager, job, 'Applied', reason)
                 else:
-                    print(f"  [SHEET] Skipped (direct --job-id mode, no sheet row)")
-                # Mark task as done in Chalan
+                    log.info("Sheet skip (direct --job-id mode)")
                 task_text = job.get('_task_text', job.get('Company', ''))
                 mark_task_done(task_text[:50])
             elif ok:
                 results['applied'] += 1  # dry-run success
-            elif 'skip' in reason.lower() or 'already' in reason.lower():
+                applied_jobs.append(f"• {company} — {role} [DRY-RUN]")
+            elif any(k in reason.lower() for k in ('skip', 'already', 'not easy', 'no url', 'captcha')):
                 results['skipped'] += 1
+                log.info(f"Skipped: {company} — {reason}")
             else:
                 results['failed'] += 1
+                error_jobs.append(f"• {company} — {role}: {reason}")
+                log.warning(f"Failed: {company} — {reason}")
 
             time.sleep(5)
 
         if not args.headless:
-            print("\n[PAUSE] Browser open 10s for review...")
+            log.info("Browser open 10s for review...")
             time.sleep(10)
         browser.close()
 
-    # Summary
-    print(f"\n{'='*70}")
-    print("SUMMARY")
-    print(f"  Applied:  {results['applied']}")
-    print(f"  Failed:   {results['failed']}")
-    print(f"  Skipped:  {results['skipped']}")
-    print("=" * 70)
+    # ── Summary ───────────────────────────────────────────────────────────────
+    today = datetime.now().strftime('%d/%m/%Y %H:%M')
+    mode_label = "LIVE" if args.submit else "DRY-RUN"
+
+    log.info("=" * 60)
+    log.info("RESUMEN AUTO-APPLY")
+    log.info(f"  Aplicados: {results['applied']}")
+    log.info(f"  Fallidos:  {results['failed']}")
+    log.info(f"  Saltados:  {results['skipped']}")
+    log.info("=" * 60)
+
+    # ── Telegram summary ──────────────────────────────────────────────────────
+    status_icon = "✅" if results['applied'] > 0 else "⚠️"
+    jobs_list   = "\n".join(applied_jobs) if applied_jobs else "  (ninguno)"
+    errors_list = ("\n<b>Errores:</b>\n" + "\n".join(error_jobs)) if error_jobs else ""
+
+    tg_msg = (
+        f"🤖 <b>Auto-Apply — {today}</b>\n"
+        f"{status_icon} Modo: {mode_label}\n\n"
+        f"📋 <b>{results['applied']}</b> aplicaciones enviadas:\n"
+        f"{jobs_list}\n"
+        f"⏭ Saltados: {results['skipped']}{errors_list}\n\n"
+        f"<i>Revisa Google Sheets → pestaña LinkedIn</i>"
+    )
+    if send_telegram(tg_msg):
+        log.info("Telegram enviado ✓")
 
     if args.dry_run and results['applied'] > 0:
-        print(f"\n[TIP] Run with --submit to actually apply to {results['applied']} job(s)")
+        log.info(f"[TIP] Corre con --submit para aplicar a {results['applied']} job(s)")
 
 
 if __name__ == '__main__':
