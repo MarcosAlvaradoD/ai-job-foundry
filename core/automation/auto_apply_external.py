@@ -29,6 +29,26 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Raíz del proyecto: core/automation/auto_apply_external.py → ../../
+_PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
+
+def _resolve_cv_path() -> str:
+    """Busca el CV en el proyecto primero; fallback a rutas conocidas."""
+    candidates = [
+        _PROJECT_ROOT / "data" / "cv" / "CV_Marcos_Alvarado_2026.pdf",
+        _PROJECT_ROOT / "data" / "cvs" / "cv_base__20260427.pdf",
+    ]
+    for p in candidates:
+        if p.exists():
+            return str(p)
+    # Fallback: usar PROJECT_ROOT de .env si está seteado
+    env_root = os.getenv("PROJECT_ROOT", "")
+    if env_root:
+        fallback = Path(env_root) / "data" / "cv" / "CV_Marcos_Alvarado_2026.pdf"
+        if fallback.exists():
+            return str(fallback)
+    return str(candidates[0])  # devuelve la ruta canónica aunque no exista (el upload fallará con warning claro)
+
 # ── CV defaults (override via cv_data param) ──────────────────────────────────
 DEFAULT_CV = {
     "first_name":   "Marcos",
@@ -40,7 +60,7 @@ DEFAULT_CV = {
     "city":         "Guadalajara",
     "country":      "Mexico",
     "linkedin_url": "https://www.linkedin.com/in/marcosalvarado-it",
-    "resume_path":  r"C:\Users\MSI\Desktop\ai-job-foundry\data\cv\CV_Marcos_Alvarado_2026.pdf",
+    "resume_path":  _resolve_cv_path(),  # detecta la ruta correcta automáticamente
     # Screening defaults
     "years_experience":       "10",
     "salary_expectation_mxn": "60000",

@@ -204,36 +204,50 @@ class LinkedInAutoApplyV3:
         return False
     
     def get_high_fit_jobs(self, min_score=7):
-        """Get jobs with FIT SCORE >= min_score and ONLY LinkedIn URLs"""
-        print(f"\n[SEARCH] Finding LinkedIn jobs with FIT >= {min_score}...")
-        
-        all_jobs = self.sheet_manager.get_all_jobs(tab="registry")
+        """Get jobs with FIT SCORE >= min_score, Status=New, and ONLY LinkedIn URLs."""
+        print(f"\n[SEARCH] Finding LinkedIn jobs with FIT >= {min_score} and Status=New...")
+
+        # FIX: jobs live in 'linkedin' tab, not 'registry'
+        all_jobs = self.sheet_manager.get_all_jobs(tab="linkedin")
         high_fit = []
+        skipped_applied  = 0
+        skipped_status   = 0
         skipped_external = 0
-        
+
         for job in all_jobs:
             try:
-                fit_score = int(job.get('FitScore', 0))
-                status = job.get('Status', '').lower()
-                apply_url = job.get('ApplyURL', '')
-                
-                # Skip if already applied
-                if 'applied' in status:
+                fit_score = int(job.get('FitScore', 0) or 0)
+                status    = job.get('Status', '').strip().lower()
+                apply_url = job.get('ApplyURL', '').strip()
+
+                # Skip terminal statuses (already processed)
+                if status in ('applied', 'rejected', 'interview', 'offer'):
+                    skipped_applied += 1
                     continue
-                
-                # Only jobs with high FIT and valid URL
+
+                # Only act on explicit "new" (or blank — not yet reviewed)
+                if status not in ('new', ''):
+                    skipped_status += 1
+                    continue
+
+                # FIT score + valid URL required
                 if fit_score >= min_score and apply_url:
-                    # ✅ CRITICAL: Only LinkedIn URLs with Easy Apply
+                    # Only LinkedIn Easy Apply jobs
                     if 'linkedin.com/jobs' in apply_url:
                         high_fit.append(job)
                     else:
                         skipped_external += 1
+
             except Exception as e:
                 print(f"    [WARN] Skipping job due to parse error: {e}")
                 continue
-        
+
         print(f"[FOUND] {len(high_fit)} LinkedIn jobs ready for auto-apply")
-        if skipped_external > 0:
+        if skipped_applied:
+            print(f"[SKIP] {skipped_applied} already processed (Applied/Rejected/etc)")
+        if skipped_status:
+            print(f"[SKIP] {skipped_status} non-New status (manual review pending)")
+        if skipped_external:
             print(f"[SKIP] {skipped_external} external jobs (not LinkedIn Easy Apply)")
         return high_fit
     
