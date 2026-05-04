@@ -6,11 +6,15 @@ Wrapper sobre LinkedInAutoApplyV3 con opciones de línea de comandos.
 Habilita submit real y modo headless opcional.
 
 Uso:
-  py scripts/apply/run_autoapply.py --dry-run          # simula sin enviar
-  py scripts/apply/run_autoapply.py --submit            # envia aplicaciones reales
-  py scripts/apply/run_autoapply.py --submit --max 5    # max 5 apps
-  py scripts/apply/run_autoapply.py --submit --headless # sin ventana de browser
-  py scripts/apply/run_autoapply.py --job-id 4392502231 # job especifico
+  py scripts/apply/run_autoapply.py --dry-run            # simula sin enviar
+  py scripts/apply/run_autoapply.py --submit             # envía a todos (Easy Apply + ATS externos)
+  py scripts/apply/run_autoapply.py --submit --max 5     # max 5 apps
+  py scripts/apply/run_autoapply.py --submit --headless  # sin ventana de browser
+  py scripts/apply/run_autoapply.py --job-id 4392502231  # job específico
+  py scripts/apply/run_autoapply.py --submit --no-external  # solo LinkedIn Easy Apply
+
+Plataformas externas soportadas: Workable, Greenhouse, Lever, SmartRecruiters, BambooHR, Ashby, Workday, Generic
+IA: LM Studio/Ollama (local, prioritario) → Gemini Flash → NVIDIA NIM → respuesta genérica
 
 El script:
   1. Lee jobs de Google Sheets (FIT >= min_score, Status != Applied)
@@ -243,37 +247,81 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
         # Check for Easy Apply button
         easy_apply = page.query_selector('button:has-text("Easy Apply")')
         if not easy_apply:
-            # Try alternate selectors
             easy_apply = page.query_selector('[aria-label*="Easy Apply"]')
+
         if not easy_apply:
             if try_external:
-                print("[EXT] No Easy Apply found — trying external site apply...")
-                # Detect if the job has an external apply URL (not linkedin.com)
-                ext_url = url
-                # Try to find the external "Apply" button href
-                ext_link = page.query_selector('a:has-text("Apply"):not(:has-text("Easy Apply"))')
-                if ext_link:
-                    href = ext_link.get_attribute("href")
-                    if href and "linkedin.com" not in href:
-                        ext_url = href
-                        print(f"[EXT] External URL found: {ext_url[:80]}")
+                print("[EXT] No Easy Apply — detecting external ATS...")
 
-                # Run async external applier from sync context
+                # Strategy: click the Apply button and capture where LinkedIn redirects us.
+                # LinkedIn opens external ATSs in a new tab (popup). We intercept it.
+                ext_url = None
+
+                # First try: find href on the Apply link directly (some LinkedIn pages have it)
+                for sel in (
+                    'a[data-tracking-control-name*="apply"]',
+                    'a:has-text("Apply"):not([aria-label*="Easy"])',
+                    'a[href*="workable"], a[href*="greenhouse"], a[href*="lever.co"], '
+                    'a[href*="smartrecruiters"], a[href*="bamboohr"], a[href*="ashby"]',
+                ):
+                    try:
+                        el = page.query_selector(sel)
+                        if el:
+                            href = el.get_attribute("href") or ""
+                            if href and "linkedin.com" not in href and href.startswith("http"):
+                                ext_url = href
+                                print(f"[EXT] Direct href found: {ext_url[:80]}")
+                                break
+                    except Exception:
+                        pass
+
+                # Second try: click Apply and capture the popup/new-tab URL
+                if not ext_url:
+                    apply_btn = page.query_selector('button:has-text("Apply"):not(:has-text("Easy"))')
+                    if apply_btn:
+                        try:
+                            with page.expect_popup(timeout=8000) as popup_info:
+                                apply_btn.click()
+                            popup_page = popup_info.value
+                            popup_page.wait_for_load_state("domcontentloaded", timeout=15000)
+                            ext_url = popup_page.url
+                            print(f"[EXT] Popup URL captured: {ext_url[:80]}")
+                            popup_page.close()
+                        except Exception:
+                            # No popup — might navigate in same tab
+                            try:
+                                apply_btn.click()
+                                page.wait_for_url(lambda u: "linkedin.com" not in u, timeout=8000)
+                                ext_url = page.url
+                                print(f"[EXT] Navigation URL: {ext_url[:80]}")
+                            except Exception:
+                                pass
+
+                if not ext_url:
+                    print("[SKIP] Could not resolve external apply URL")
+                    return False, "Not Easy Apply — external URL not found"
+
                 from core.automation.auto_apply_external import ExternalApplier, detect_platform
                 platform = detect_platform(ext_url)
-                print(f"[EXT] Platform: {platform.upper()}")
+                print(f"[EXT] Platform: {platform.upper()} | {ext_url[:80]}")
 
-                # We need an async context — use asyncio.run() in a thread-safe way
                 from playwright.async_api import async_playwright as _async_pw
                 import asyncio
+
+                headless_ext = getattr(page, '_headless_hint', False)
 
                 async def _do_external():
                     ext_applier = ExternalApplier()
                     async with _async_pw() as pw:
-                        browser2 = await pw.chromium.launch(headless=False)
-                        ctx2     = await browser2.new_context(viewport={"width": 1280, "height": 800})
-                        page2    = await ctx2.new_page()
-                        result   = await ext_applier.apply(page2, job, submit=submit)
+                        browser2 = await pw.chromium.launch(
+                            headless=headless_ext,
+                            args=['--disable-blink-features=AutomationControlled']
+                        )
+                        ctx2  = await browser2.new_context(viewport={"width": 1280, "height": 900})
+                        page2 = await ctx2.new_page()
+                        # Pass the resolved external URL directly
+                        job_ext = {**job, "ApplyURL": ext_url}
+                        result  = await ext_applier.apply(page2, job_ext, submit=submit)
                         await browser2.close()
                         return result
 
@@ -281,9 +329,9 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
                     ok_ext, reason_ext = asyncio.run(_do_external())
                     return ok_ext, reason_ext
                 except Exception as e:
-                    return False, f"External apply failed: {e}"
+                    return False, f"External apply error: {e}"
             else:
-                print("[SKIP] Not an Easy Apply job (use --external to attempt external sites)")
+                print("[SKIP] Not an Easy Apply job (--external disabled)")
                 return False, "Not Easy Apply"
 
         print("[FOUND] Easy Apply button")
@@ -392,8 +440,12 @@ def main():
     parser.add_argument('--min-fit',    type=float, default=7.0, help='Min FIT score (default: 7)')
     parser.add_argument('--job-id',     type=str, default='', help='Apply to specific LinkedIn job ID')
     parser.add_argument('--no-confirm', action='store_true', help='Skip 5-second safety pause (for pipeline use)')
-    parser.add_argument('--external',   action='store_true', help='Also attempt external-site apply (Workday/Greenhouse/Lever/etc)')
+    parser.add_argument('--no-external', action='store_true',
+                        help='Only attempt LinkedIn Easy Apply (skip external ATS sites)')
     args = parser.parse_args()
+
+    # external is ON by default; --no-external disables it
+    args.external = not args.no_external
 
     # Default to dry-run if neither specified
     if not args.submit:
@@ -402,7 +454,7 @@ def main():
     print("=" * 70)
     print("LinkedIn Auto-Apply — Production Runner")
     mode_str = "SUBMIT (LIVE)" if args.submit else "DRY-RUN"
-    ext_str  = " + External Sites" if args.external else " (Easy Apply only)"
+    ext_str  = " + External ATS" if args.external else " (Easy Apply only)"
     print(f"Mode: {mode_str}{ext_str} | Max: {args.max} | Min FIT: {args.min_fit} | Headless: {args.headless}")
     print("=" * 70)
 

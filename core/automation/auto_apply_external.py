@@ -29,6 +29,80 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ── Multi-backend AI (Gemini → NVIDIA NIM → fallback) ────────────────────────
+_GEMINI_KEY  = os.getenv("GEMINI_API_KEY", "")
+_NVIDIA_KEY  = os.getenv("NVIDIA_API_KEY", "")
+_LITELLM_URL = os.getenv("LLM_URL",   "http://127.0.0.1:4000/chat/completions")
+_LITELLM_KEY = os.getenv("LITELLM_KEY", "sk-1234567890abcdef")
+_LITELLM_MDL = os.getenv("LLM_MODEL",  "local-llama")
+
+
+def _call_llm(prompt: str, max_tokens: int = 200) -> str:
+    """
+    Calls AI with LOCAL-FIRST priority (auto-apply only runs on local PC):
+      1. LM Studio / Ollama (via LiteLLM proxy, gratis, sin latencia de red)
+      2. Gemini Flash  (nube, solo si local no está levantado)
+      3. NVIDIA NIM    (nube, fallback final)
+    Returns text response or empty string on total failure.
+    """
+    # ── 1. LM Studio / Ollama (local — prioridad máxima) ────────────────────
+    try:
+        r = requests.post(
+            _LITELLM_URL,
+            headers={"Authorization": f"Bearer {_LITELLM_KEY}"},
+            json={"model": _LITELLM_MDL,
+                  "messages": [{"role": "user", "content": prompt}],
+                  "max_tokens": max_tokens, "temperature": 0.3},
+            timeout=15,   # timeout corto — si local está caído falla rápido
+        )
+        if r.status_code == 200:
+            txt = r.json()["choices"][0]["message"]["content"].strip()
+            if txt:
+                print("    [AI] ✓ Local LLM respondió")
+                return txt
+    except Exception:
+        print("    [AI] Local LLM no disponible — escalando a nube...")
+
+    # ── 2. Gemini Flash ──────────────────────────────────────────────────────
+    if _GEMINI_KEY:
+        try:
+            r = requests.post(
+                f"https://generativelanguage.googleapis.com/v1beta/models/"
+                f"gemini-1.5-flash:generateContent?key={_GEMINI_KEY}",
+                json={"contents": [{"parts": [{"text": prompt}]}],
+                      "generationConfig": {"maxOutputTokens": max_tokens, "temperature": 0.3}},
+                timeout=20,
+            )
+            if r.status_code == 200:
+                txt = r.json()["candidates"][0]["content"]["parts"][0]["text"].strip()
+                if txt:
+                    print("    [AI] ✓ Gemini Flash respondió")
+                    return txt
+        except Exception:
+            pass
+
+    # ── 3. NVIDIA NIM ────────────────────────────────────────────────────────
+    if _NVIDIA_KEY:
+        try:
+            r = requests.post(
+                "https://integrate.api.nvidia.com/v1/chat/completions",
+                headers={"Authorization": f"Bearer {_NVIDIA_KEY}"},
+                json={"model": "meta/llama-3.1-8b-instruct",
+                      "messages": [{"role": "user", "content": prompt}],
+                      "max_tokens": max_tokens, "temperature": 0.3},
+                timeout=25,
+            )
+            if r.status_code == 200:
+                txt = r.json()["choices"][0]["message"]["content"].strip()
+                if txt:
+                    print("    [AI] ✓ NVIDIA NIM respondió")
+                    return txt
+        except Exception:
+            pass
+
+    print("    [AI] Todos los backends fallaron — usando respuesta genérica")
+    return ""
+
 # Raíz del proyecto: core/automation/auto_apply_external.py → ../../
 _PROJECT_ROOT = Path(__file__).parent.parent.parent.resolve()
 
@@ -73,52 +147,76 @@ DEFAULT_CV = {
 }
 
 # ── AI helper ─────────────────────────────────────────────────────────────────
-LLM_URL   = os.getenv("LLM_URL",   "http://127.0.0.1:4000/chat/completions")
-LLM_MODEL = os.getenv("LLM_MODEL", "local-llama")
-LLM_KEY   = os.getenv("LITELLM_KEY", "sk-1234567890abcdef")
-
 MARCOS_PROFILE = """
 Marcos Alvarado — Senior Project Manager / Business Analyst, 10+ years.
 Especialidades: ERP migrations (SAP, Dynamics AX), ETL, BI/Power BI, LATAM projects.
 Idiomas: Español nativo, Inglés profesional fluido.
 Industrias: Fintech, Retail, Manufactura, Gobierno, Salud.
 Modalidad: Remoto preferido, híbrido aceptable. Guadalajara, México.
+LSS Black Belt. LinkedIn: linkedin.com/in/marcosalvarado-it
 """.strip()
+
+HEADLINE_DEFAULT = (
+    "Senior Project Manager | ERP Migrations (SAP · Dynamics AX) | "
+    "ETL · Azure | LSS Black Belt | Bilingual EN/ES"
+)
+
+SUMMARY_DEFAULT = (
+    "Senior Project Manager and Business Analyst with 10+ years delivering complex "
+    "ERP migrations, data integration pipelines, and cross-functional initiatives "
+    "across LATAM and North America. Certified Lean Six Sigma Black Belt with "
+    "hands-on experience in SAP, Dynamics AX, Azure, and Power BI. "
+    "Bilingual EN/ES. Available immediately for remote or hybrid senior PM/BA roles."
+)
 
 
 def ask_ai(question: str, job: dict, cv: dict, max_words: int = 80) -> str:
-    """Ask LM Studio / LiteLLM a custom application question. Falls back to generic."""
+    """
+    Answer an application question using multi-backend AI
+    (Gemini Flash → NVIDIA NIM → LiteLLM/Ollama → generic fallback).
+    """
     title   = job.get("Role",    job.get("title",   "Project Manager"))
     company = job.get("Company", job.get("company", "the company"))
+
     prompt = (
         f"You are filling a job application for {title} at {company}.\n"
         f"Candidate profile:\n{MARCOS_PROFILE}\n\n"
         f"Answer this application question in {max_words} words or fewer, "
-        f"professional and specific to the role:\n\n{question}"
+        f"professional, specific, and in first person:\n\n{question}"
     )
-    try:
-        r = requests.post(
-            LLM_URL,
-            headers={"Authorization": f"Bearer {LLM_KEY}"},
-            json={
-                "model": LLM_MODEL,
-                "messages": [{"role": "user", "content": prompt}],
-                "max_tokens": 200,
-                "temperature": 0.3,
-            },
-            timeout=20,
-        )
-        if r.status_code == 200:
-            return r.json()["choices"][0]["message"]["content"].strip()
-    except Exception as e:
-        print(f"    [AI WARN] LM Studio unavailable: {e}")
 
-    # Fallback — generic but professional answer
+    answer = _call_llm(prompt, max_tokens=250)
+    if answer:
+        return answer
+
+    # Hard fallback — no AI available
     return (
-        f"With 10+ years of experience in project management and ERP implementations, "
-        f"I am confident I can contribute significantly to {company} as {title}. "
-        f"My background in SAP, Agile methodologies, and cross-functional leadership "
-        f"aligns well with this opportunity."
+        f"With 10+ years delivering ERP migrations and cross-functional programs "
+        f"across LATAM, I am confident I can add immediate value to {company} as {title}. "
+        f"My background in SAP, Agile, and bilingual stakeholder management "
+        f"aligns directly with this opportunity."
+    )
+
+
+def generate_cover_letter(job: dict, cv: dict, max_words: int = 120) -> str:
+    """Generate a targeted 3-sentence cover letter."""
+    title   = job.get("Role",    "this role")
+    company = job.get("Company", "your company")
+    prompt = (
+        f"Write a professional 3-sentence cover letter for {title} at {company}.\n"
+        f"Candidate:\n{MARCOS_PROFILE}\n"
+        f"Be specific, confident, and under {max_words} words. "
+        f"Do NOT use generic phrases like 'I am writing to express my interest'."
+    )
+    result = _call_llm(prompt, max_tokens=200)
+    if result:
+        return result
+    return (
+        f"With a decade of ERP and cross-functional program delivery in LATAM, "
+        f"I bring the bilingual leadership and technical depth that {company} needs for {title}. "
+        f"I have led SAP and Dynamics AX migrations end-to-end while driving process improvements "
+        f"as a certified LSS Black Belt. I would welcome the opportunity to discuss how my "
+        f"background aligns with your team's goals."
     )
 
 
@@ -129,6 +227,8 @@ def detect_platform(url: str) -> str:
     url_lower = url.lower()
     if "myworkdayjobs.com" in url_lower or "myworkday.com" in url_lower:
         return "workday"
+    if "workable.com" in url_lower:
+        return "workable"
     if "greenhouse.io" in url_lower:
         return "greenhouse"
     if "lever.co" in url_lower:
@@ -137,6 +237,8 @@ def detect_platform(url: str) -> str:
         return "smartrecruiters"
     if "bamboohr.com" in url_lower:
         return "bamboohr"
+    if "ashbyhq.com" in url_lower or "ashby.io" in url_lower:
+        return "ashby"
     if "successfactors" in url_lower:
         return "successfactors"
     return "generic"
@@ -167,10 +269,12 @@ class ExternalApplier:
 
         handler = {
             "workday":         self._apply_workday,
+            "workable":        self._apply_workable,
             "greenhouse":      self._apply_greenhouse,
             "lever":           self._apply_lever,
             "smartrecruiters": self._apply_smartrecruiters,
             "bamboohr":        self._apply_bamboohr,
+            "ashby":           self._apply_ashby,
             "successfactors":  self._apply_generic,   # complex — use generic for now
             "generic":         self._apply_generic,
         }.get(platform, self._apply_generic)
@@ -257,6 +361,141 @@ class ExternalApplier:
 
         return False, "Workday: could not reach Submit"
 
+    # ── Workable ──────────────────────────────────────────────────────────────
+
+    async def _apply_workable(self, page, job, url, submit) -> Tuple[bool, str]:
+        """
+        Workable ATS — used by many SMBs and scale-ups (*.workable.com).
+        Typical flow: job page → Apply → multi-step wizard
+        Steps observed: Contact Info → Resume/Headline/Summary → Questions → Submit
+        """
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await asyncio.sleep(3)
+
+        # Click "Apply for this job" or "Apply Now" button if present
+        apply_btn = await self._find_any(page, [
+            'button:has-text("Apply for this job")',
+            'a:has-text("Apply for this job")',
+            'button:has-text("Apply Now")',
+            'a:has-text("Apply Now")',
+            'button[data-ui="apply-button"]',
+        ])
+        if apply_btn:
+            await apply_btn.click()
+            await asyncio.sleep(3)
+
+        # ── Step 1: Contact Info ───────────────────────────────────────────
+        await self._fill_field(page, 'input[name="firstname"]',  self.cv["first_name"])
+        await self._fill_field(page, 'input[name="lastname"]',   self.cv["last_name"])
+        await self._fill_field(page, 'input[name="email"]',      self.cv["email"])
+        await self._fill_field(page, 'input[name="phone"]',      self.cv["phone_intl"])
+
+        # Location / address (Workable asks for city)
+        await self._fill_field(page, 'input[name="address"]',    self.cv["city"])
+        await self._fill_field(page, 'input[placeholder*="ocation"]', self.cv["city"])
+
+        # Pronouns — select "He/Him" if dropdown exists
+        try:
+            pronoun_sel = await page.query_selector('select[name="pronoun"], select[id*="pronoun"]')
+            if pronoun_sel:
+                opts = await pronoun_sel.query_selector_all("option")
+                for opt in opts:
+                    txt = (await opt.inner_text()).lower()
+                    if "he" in txt or "him" in txt:
+                        await pronoun_sel.select_option(value=await opt.get_attribute("value"))
+                        break
+        except Exception:
+            pass
+
+        # Compensation / salary — skip if "Select an option" (leave default)
+        # Workable salary dropdowns: just leave them unset unless we have a match
+        # (avoids disqualifying ourselves on salary)
+
+        # ── Navigate to next step ─────────────────────────────────────────
+        next1 = await self._find_any(page, [
+            'button:has-text("Next")',
+            'button:has-text("Continue")',
+            'button[type="submit"]:has-text("Next")',
+        ])
+        if next1:
+            await next1.click()
+            await asyncio.sleep(2)
+
+        # ── Step 2: Resume + Headline + Summary ───────────────────────────
+        await self._upload_resume(page, [
+            'input[type="file"][accept*="pdf"]',
+            'input[type="file"]',
+        ])
+        await asyncio.sleep(1)
+
+        # Headline (short professional title)
+        await self._fill_field(page, 'input[name="headline"]',   HEADLINE_DEFAULT)
+        await self._fill_field(page, 'input[placeholder*="eadline"]', HEADLINE_DEFAULT)
+
+        # Summary (professional summary)
+        await self._fill_field(page, 'textarea[name="summary"]', SUMMARY_DEFAULT)
+        await self._fill_field(page, '[contenteditable][aria-label*="ummary"]', SUMMARY_DEFAULT)
+
+        # LinkedIn URL
+        await self._fill_field(page, 'input[name="linkedin"]',   self.cv["linkedin_url"])
+        await self._fill_field(page, 'input[placeholder*="inkedIn"]', self.cv["linkedin_url"])
+
+        # ── Navigate through remaining steps ──────────────────────────────
+        for _step in range(1, 6):
+            await self._fill_ai_questions(page, job)
+            await asyncio.sleep(1)
+
+            submit_btn = await self._find_any(page, [
+                'button:has-text("Submit Application")',
+                'button:has-text("Submit application")',
+                'button[type="submit"]:has-text("Submit")',
+            ])
+            if submit_btn:
+                if submit:
+                    await submit_btn.click()
+                    await asyncio.sleep(4)
+                    return True, "Applied (Workable)"
+                return True, "Dry-run: Workable form filled"
+
+            next_btn = await self._find_any(page, [
+                'button:has-text("Next")',
+                'button:has-text("Continue")',
+            ])
+            if not next_btn:
+                break
+            await next_btn.click()
+            await asyncio.sleep(2)
+
+        return False, "Workable: could not reach Submit"
+
+    # ── Ashby ─────────────────────────────────────────────────────────────────
+
+    async def _apply_ashby(self, page, job, url, submit) -> Tuple[bool, str]:
+        """Ashby HQ — modern ATS used by many YC/tech startups."""
+        await page.goto(url, wait_until="domcontentloaded", timeout=30000)
+        await asyncio.sleep(2)
+
+        await self._fill_field(page, 'input[name="name"]',  self.cv["full_name"])
+        await self._fill_field(page, 'input[name="email"]', self.cv["email"])
+        await self._fill_field(page, 'input[name="phone"]', self.cv["phone_intl"])
+
+        await self._upload_resume(page, ['input[type="file"]'])
+        await self._fill_ai_questions(page, job)
+
+        if not submit:
+            return True, "Dry-run: Ashby form filled"
+
+        submit_btn = await self._find_any(page, [
+            'button[type="submit"]',
+            'button:has-text("Submit Application")',
+        ])
+        if submit_btn:
+            await submit_btn.click()
+            await asyncio.sleep(3)
+            return True, "Applied (Ashby)"
+
+        return False, "Ashby: Submit button not found"
+
     # ── Greenhouse ────────────────────────────────────────────────────────────
 
     async def _apply_greenhouse(self, page, job, url, submit) -> Tuple[bool, str]:
@@ -286,11 +525,7 @@ class ExternalApplier:
         ])
 
         # Cover letter (text area)
-        cover_letter = ask_ai(
-            f"Write a 3-sentence cover letter for {job.get('Role','this role')} "
-            f"at {job.get('Company','this company')}.",
-            job, self.cv, max_words=100
-        )
+        cover_letter = generate_cover_letter(job, self.cv)
         await self._fill_field(page, '#cover_letter', cover_letter)
         await self._fill_field(page, 'textarea[name="cover_letter"]', cover_letter)
 
@@ -349,10 +584,7 @@ class ExternalApplier:
         ])
 
         # Cover letter / comments
-        cover = ask_ai(
-            f"Short cover letter for {job.get('Role')} at {job.get('Company')}.",
-            job, self.cv, max_words=80
-        )
+        cover = generate_cover_letter(job, self.cv, max_words=80)
         await self._fill_field(page, 'textarea[name="comments"]', cover)
 
         # Custom questions
