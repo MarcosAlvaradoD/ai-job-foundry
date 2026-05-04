@@ -16,6 +16,8 @@ on:
 env:
   GOOGLE_SHEETS_ID: ${{ secrets.GOOGLE_SHEETS_ID }}
   LINKEDIN_EMAIL:   ${{ secrets.LINKEDIN_EMAIL }}
+  NVIDIA_API_KEY:   ${{ secrets.NVIDIA_API_KEY }}
+  GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
   PROJECT_ROOT:     ${{ github.workspace }}
 
 jobs:
@@ -73,7 +75,12 @@ jobs:
           SCRAPER_MODE: ${{ github.event.inputs.mode || 'live' }}
           DISPLAY: ':99'   # needed for some Playwright configurations
 
-      # ── 6. Limpiar credenciales del runner (seguridad) ───────────────────────
+      # ── 6. Calcular FIT scores con IA ───────────────────────────────────────
+      - name: Calculate FIT scores (Gemini → NVIDIA NIM fallback)
+        run: python scripts/maintenance/calculate_linkedin_fit_scores.py
+        timeout-minutes: 25
+
+      # ── 7. Limpiar credenciales del runner (seguridad) ───────────────────────
       - name: Cleanup credentials
         if: always()
         run: |
@@ -82,7 +89,7 @@ jobs:
           rm -f data/credentials/token.json
           echo "Credentials cleaned from runner"
 
-      # ── 7. Notificación Telegram ─────────────────────────────────────────────
+      # ── 8. Notificación Telegram ─────────────────────────────────────────────
       - name: Send Telegram notification
         if: always()
         env:
