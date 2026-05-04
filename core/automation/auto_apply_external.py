@@ -264,6 +264,15 @@ class ExternalApplier:
         if not url:
             return False, "No ApplyURL"
 
+        # Use customized CV if one was pre-generated for this job (FIT >= 8)
+        if job.get("_cv_path"):
+            cv_path_str = str(job["_cv_path"])
+            if Path(cv_path_str).exists():
+                self.cv["resume_path"] = cv_path_str
+                print(f"    [CV] Using custom CV: {Path(cv_path_str).name}")
+            else:
+                print(f"    [CV] Custom CV not found ({cv_path_str}) — using base CV")
+
         platform = detect_platform(url)
         print(f"    [EXT] Platform detected: {platform.upper()} — {url[:80]}")
 

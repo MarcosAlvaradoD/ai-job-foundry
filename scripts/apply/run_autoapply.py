@@ -440,8 +440,10 @@ def main():
     parser.add_argument('--min-fit',    type=float, default=7.0, help='Min FIT score (default: 7)')
     parser.add_argument('--job-id',     type=str, default='', help='Apply to specific LinkedIn job ID')
     parser.add_argument('--no-confirm', action='store_true', help='Skip 5-second safety pause (for pipeline use)')
-    parser.add_argument('--no-external', action='store_true',
+    parser.add_argument('--no-external',  action='store_true',
                         help='Only attempt LinkedIn Easy Apply (skip external ATS sites)')
+    parser.add_argument('--skip-cv-gen', action='store_true',
+                        help='Skip AI CV customization — always use base CV (faster, no LLM call)')
     args = parser.parse_args()
 
     # external is ON by default; --no-external disables it
@@ -510,6 +512,19 @@ def main():
     print(f"\n[PLAN] Processing {len(jobs_to_process)} jobs:")
     for i, j in enumerate(jobs_to_process, 1):
         print(f"  {i}. {j['Company']} - {j['Role']} (FIT: {j['FitScore']})")
+
+    # ── CV resolution (before browser opens — fail fast on CV errors) ─────────
+    if not args.skip_cv_gen:
+        try:
+            from core.automation.cv_customizer import get_cv_for_job
+            log.info("[CV] Resolving CV paths (FIT>=8 → custom, FIT<8 → base)...")
+            for job in jobs_to_process:
+                job['_cv_path'] = get_cv_for_job(job)
+                log.info(f"  [CV] {job['Company']}: {job['_cv_path'].name}")
+        except Exception as e:
+            log.warning(f"[CV] Customizer error ({e}) — all jobs will use base CV")
+    else:
+        log.info("[CV] --skip-cv-gen set — using base CV for all jobs")
 
     # Start browser
     results = {'applied': 0, 'failed': 0, 'skipped': 0}
