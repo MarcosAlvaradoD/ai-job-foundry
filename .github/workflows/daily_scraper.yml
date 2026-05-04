@@ -23,7 +23,7 @@ env:
 jobs:
   scrape:
     runs-on: ubuntu-22.04
-    timeout-minutes: 30
+    timeout-minutes: 65   # scraper ~16m + FIT scores hasta 25m + margen
 
     steps:
       # ── 1. Checkout ──────────────────────────────────────────────────────────
