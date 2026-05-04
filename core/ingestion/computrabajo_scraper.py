@@ -96,6 +96,65 @@ class ComputrabajoScraper:
                 continue
         return []
 
+    async def _extract_jsonld(self, page) -> list[dict]:
+        """
+        Extract jobs from JSON-LD <script type="application/ld+json"> blocks.
+        JobPosting schema is far more stable than CSS selectors.
+        Returns list of job dicts (same shape as the CSS-based path).
+        """
+        import json as _json
+        try:
+            scripts = await page.query_selector_all('script[type="application/ld+json"]')
+            jobs = []
+            for script in scripts:
+                raw = await script.inner_text()
+                try:
+                    data = _json.loads(raw)
+                except Exception:
+                    continue
+                # May be a single object or a list
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if item.get("@type") == "JobPosting":
+                        title    = item.get("title", "").strip()
+                        company  = ""
+                        org      = item.get("hiringOrganization", {})
+                        if isinstance(org, dict):
+                            company = org.get("name", "").strip()
+                        location = ""
+                        loc_obj  = item.get("jobLocation", {})
+                        if isinstance(loc_obj, dict):
+                            addr = loc_obj.get("address", {})
+                            if isinstance(addr, dict):
+                                location = (addr.get("addressLocality") or
+                                            addr.get("addressRegion") or "México").strip()
+                        apply_url = (item.get("url") or item.get("sameAs") or "").strip()
+                        if not title or not apply_url:
+                            continue
+                        loc_lower = location.lower()
+                        remote = ("Remote" if ("remot" in loc_lower or "home office" in loc_lower)
+                                  else "Hybrid" if ("híbrid" in loc_lower or "hybrid" in loc_lower)
+                                  else "OnSite")
+                        jobs.append({
+                            "title": title, "company": company,
+                            "location": location, "apply_url": apply_url, "remote": remote,
+                        })
+            return jobs
+        except Exception as exc:
+            print(f"  {YELLOW}JSON-LD extraction error: {exc}{END}")
+            return []
+
+    async def _load_page(self, page, url: str):
+        """Navigate to url and wait for content to settle."""
+        await page.goto(url, timeout=40000, wait_until="domcontentloaded")
+        try:
+            await page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:
+            pass
+        await asyncio.sleep(4)
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await asyncio.sleep(2)
+
     async def _search(self, page, query: str, query_source: str):
         print(f"\n{CYAN}[Computrabajo] Searching: {query}{END}")
 
@@ -106,17 +165,31 @@ class ComputrabajoScraper:
         url = f"https://www.computrabajo.com.mx/ofertas-de-trabajo?q={encoded_q}&r=10"
 
         try:
-            await page.goto(url, timeout=40000, wait_until="domcontentloaded")
-            # Let JS finish rendering
-            try:
-                await page.wait_for_load_state("networkidle", timeout=15000)
-            except Exception:
-                pass
-            await asyncio.sleep(5)
-            # Scroll to trigger lazy-loaded cards
-            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-            await asyncio.sleep(2)
+            await self._load_page(page, url)
 
+            # ── Strategy 1: JSON-LD structured data (most stable) ────────────
+            jsonld_jobs = await self._extract_jsonld(page)
+            if jsonld_jobs:
+                print(f"  JSON-LD: {len(jsonld_jobs)} jobs extracted")
+                count = 0
+                for jl in jsonld_jobs[:20]:
+                    self.jobs_found.append({
+                        'Role':        jl["title"][:100],
+                        'Company':     jl["company"][:100],
+                        'Location':    jl["location"][:100],
+                        'ApplyURL':    jl["apply_url"],
+                        'Source':      'Computrabajo MX',
+                        'SearchQuery': query,
+                        'QuerySource': query_source,
+                        'DateFound':   datetime.now().strftime('%Y-%m-%d'),
+                        'Status':      'New',
+                        'RemoteScope': jl["remote"],
+                    })
+                    count += 1
+                print(f"  {GREEN}Found {count} jobs (JSON-LD){END}")
+                return
+
+            # ── Strategy 2: CSS card selectors ───────────────────────────────
             cards = await self._find_cards(page)
 
             if not cards:
@@ -131,32 +204,52 @@ class ComputrabajoScraper:
 
                 # Fallback: slug-based URL
                 url2 = f"https://www.computrabajo.com.mx/trabajo-de-{slug}?r=10"
-                print(f"  {YELLOW}Trying fallback: {url2}{END}")
-                await page.goto(url2, timeout=40000, wait_until="domcontentloaded")
-                try:
-                    await page.wait_for_load_state("networkidle", timeout=15000)
-                except Exception:
-                    pass
-                await asyncio.sleep(5)
-                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
-                await asyncio.sleep(2)
+                print(f"  {YELLOW}Trying fallback URL: {url2}{END}")
+                await self._load_page(page, url2)
+
+                # Try JSON-LD again on fallback page
+                jsonld_jobs = await self._extract_jsonld(page)
+                if jsonld_jobs:
+                    print(f"  JSON-LD (fallback): {len(jsonld_jobs)} jobs extracted")
+                    count = 0
+                    for jl in jsonld_jobs[:20]:
+                        self.jobs_found.append({
+                            'Role':        jl["title"][:100],
+                            'Company':     jl["company"][:100],
+                            'Location':    jl["location"][:100],
+                            'ApplyURL':    jl["apply_url"],
+                            'Source':      'Computrabajo MX',
+                            'SearchQuery': query,
+                            'QuerySource': query_source,
+                            'DateFound':   datetime.now().strftime('%Y-%m-%d'),
+                            'Status':      'New',
+                            'RemoteScope': jl["remote"],
+                        })
+                        count += 1
+                    print(f"  {GREEN}Found {count} jobs (JSON-LD fallback){END}")
+                    return
+
                 cards = await self._find_cards(page)
 
-            print(f"  Total cards found: {len(cards)}")
+            print(f"  CSS cards found: {len(cards)}")
             count = 0
 
             for card in cards[:20]:
                 try:
                     # Title
-                    title_el = await card.query_selector('h2 a, .tO > a, [class*="title"] a')
+                    title_el = await card.query_selector('h2 a, .tO > a, [class*="title"] a, a[class*="Title"]')
                     title = (await title_el.inner_text()).strip() if title_el else ""
 
                     # Company
-                    company_el = await card.query_selector('[class*="company"], .dO > p:first-child, p.dO_fi')
+                    company_el = await card.query_selector(
+                        '[class*="company"], [class*="Company"], .dO > p:first-child, p.dO_fi'
+                    )
                     company = (await company_el.inner_text()).strip() if company_el else ""
 
                     # Location
-                    loc_el = await card.query_selector('[class*="location"], .dO > p:last-child, span.dO_fi')
+                    loc_el = await card.query_selector(
+                        '[class*="location"], [class*="Location"], .dO > p:last-child, span.dO_fi'
+                    )
                     location = (await loc_el.inner_text()).strip() if loc_el else "México"
 
                     # URL — href from title anchor
@@ -175,7 +268,7 @@ class ComputrabajoScraper:
                               else "Hybrid" if ("híbrid" in loc_lower or "hybrid" in loc_lower)
                               else "OnSite")
 
-                    job = {
+                    self.jobs_found.append({
                         'Role':        title[:100],
                         'Company':     company[:100],
                         'Location':    location[:100],
@@ -186,13 +279,12 @@ class ComputrabajoScraper:
                         'DateFound':   datetime.now().strftime('%Y-%m-%d'),
                         'Status':      'New',
                         'RemoteScope': remote,
-                    }
-                    self.jobs_found.append(job)
+                    })
                     count += 1
                 except Exception:
                     continue
 
-            print(f"  {GREEN}Found {count} jobs{END}")
+            print(f"  {GREEN}Found {count} jobs (CSS){END}")
 
         except Exception as e:
             print(f"  {RED}Error searching '{query}': {e}{END}")

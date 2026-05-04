@@ -73,6 +73,7 @@ def main():
     linkedin_count = 0
     indeed_count = 0
     computrabajo_count = 0
+    occ_count = 0
     had_error = False
 
     # ── 1. LinkedIn ────────────────────────────────────────────────────────────
@@ -136,15 +137,35 @@ def main():
         log.error(f"Computrabajo scraper error: {e}", exc_info=True)
         had_error = True
 
+    # ── 4. OCC Mundial ─────────────────────────────────────────────────────────
+    log.info("-" * 60)
+    log.info("Running OCC Mundial scraper...")
+    try:
+        from core.ingestion.occ_scraper import OccScraper
+
+        async def run_occ():
+            scraper = OccScraper()
+            await scraper.run(dry_run=dry_run)
+            return scraper.jobs_found or []
+
+        jobs = asyncio.run(run_occ())
+        occ_count = len(jobs)
+        log.info(f"OCC: {occ_count} jobs found")
+    except ImportError as e:
+        log.warning(f"OCC ImportError (skipping): {e}")
+    except Exception as e:
+        log.error(f"OCC scraper error: {e}", exc_info=True)
+        had_error = True
+
     # ── Summary ────────────────────────────────────────────────────────────────
-    total = linkedin_count + indeed_count + computrabajo_count
+    total = linkedin_count + indeed_count + computrabajo_count + occ_count
     log.info("=" * 60)
     log.info(
         f"RESULTADO: LinkedIn={linkedin_count} | Indeed={indeed_count} "
-        f"| Computrabajo={computrabajo_count} | TOTAL={total}"
+        f"| Computrabajo={computrabajo_count} | OCC={occ_count} | TOTAL={total}"
     )
     if not dry_run:
-        log.info("Jobs guardados en pestañas LinkedIn / Indeed / Computrabajo de Google Sheets")
+        log.info("Jobs guardados en pestañas LinkedIn / Indeed / Computrabajo / OCC de Google Sheets")
     log.info("=" * 60)
 
     sys.exit(1 if had_error else 0)

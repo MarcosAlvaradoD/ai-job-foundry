@@ -38,15 +38,32 @@ _RSS_HEADERS = {
 }
 
 
-def _fetch_rss(url: str):
-    """Fetch an RSS URL synchronously and return raw XML text, or None on error."""
+def _fetch_rss(url: str, retries: int = 3, backoff: float = 3.0):
+    """
+    Fetch an RSS URL synchronously and return raw XML text, or None on error.
+    Retries up to `retries` times with `backoff` seconds between attempts.
+    Returns None if the response looks like an HTML page (anti-bot block).
+    """
+    import time as _time
     req = urllib.request.Request(url, headers=_RSS_HEADERS)
-    try:
-        with urllib.request.urlopen(req, timeout=20) as resp:
-            return resp.read().decode("utf-8", errors="replace")
-    except Exception as exc:
-        print(f"  {RED}RSS fetch error: {exc}{END}")
-        return None
+    last_exc = None
+    for attempt in range(1, retries + 1):
+        try:
+            with urllib.request.urlopen(req, timeout=20) as resp:
+                text = resp.read().decode("utf-8", errors="replace")
+                # Detect HTML block page (Indeed returns HTML on bot detection)
+                stripped = text.lstrip()
+                if stripped.startswith("<!") or stripped[:5].lower().startswith("<html"):
+                    print(f"  {YELLOW}RSS returned HTML (anti-bot block?) — skipping{END}")
+                    return None
+                return text
+        except Exception as exc:
+            last_exc = exc
+            if attempt < retries:
+                print(f"  {YELLOW}RSS fetch attempt {attempt}/{retries} failed: {exc} — retrying in {backoff}s{END}")
+                _time.sleep(backoff)
+    print(f"  {RED}RSS fetch error (all {retries} attempts): {last_exc}{END}")
+    return None
 
 
 def _parse_location_from_description(desc: str) -> str:
@@ -66,7 +83,7 @@ def _detect_remote(title: str, description: str) -> str:
         return "Remote"
     if "híbrid" in combined or "hybrid" in combined:
         return "Hybrid"
-    return "México"
+    return "OnSite"
 
 
 class IndeedScraper:

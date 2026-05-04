@@ -42,6 +42,7 @@ class SheetManager:
             "glassdoor":    "Glassdoor",
             "adzuna":       "Adzuna",
             "computrabajo": "Computrabajo",
+            "occ":          "OCC",
             "jobleads":     "JobLeads",
             "resumen":      "Resumen",
         }

@@ -114,6 +114,7 @@ jobs:
           linkedin_count = 0
           indeed_count = 0
           computrabajo_count = 0
+          occ_count = 0
           logs = sorted(glob.glob('logs/scraper_*.log'))
           if logs:
               with open(logs[-1], encoding='utf-8', errors='ignore') as f:
@@ -130,6 +131,9 @@ jobs:
                       mc = re.search(r'Computrabajo=(\d+)', line)
                       if mc:
                           computrabajo_count = int(mc.group(1))
+                      mo = re.search(r'OCC=(\d+)', line)
+                      if mo:
+                          occ_count = int(mo.group(1))
 
           today = datetime.utcnow().strftime('%d/%m/%Y')
           status = "✅ Éxito" if total > 0 else "⚠️ Sin resultados"
@@ -141,8 +145,9 @@ jobs:
               f"  • LinkedIn: {linkedin_count}\n"
               f"  • Indeed: {indeed_count}\n"
               f"  • Computrabajo: {computrabajo_count}\n"
+              f"  • OCC Mundial: {occ_count}\n"
               f"📋 Modo: {mode.upper()}\n"
-              f"📊 Revisa Google Sheets → pestañas LinkedIn / Indeed / Computrabajo\n\n"
+              f"📊 Revisa Google Sheets → LinkedIn / Indeed / Computrabajo / OCC\n\n"
               f"<i>Siguiente scraping: mañana 10am MX</i>"
           )
 
