@@ -1,15 +1,18 @@
 #!/usr/bin/env python3
 """
-AI JOB FOUNDRY - INDEED MX SCRAPER
-====================================
-Scraper de Indeed México usando Playwright.
+AI JOB FOUNDRY - INDEED MX SCRAPER (RSS)
+=========================================
+Scraper de Indeed México usando el feed RSS público.
+Mucho más estable en CI/headless que Playwright — no requiere browser.
 Escribe resultados directamente a la pestaña "Indeed" de Google Sheets.
-No requiere autenticación — Indeed es público.
+No requiere autenticación — Indeed RSS es público.
 """
 import sys, os, asyncio
+import urllib.request
+import urllib.parse
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import datetime
-from playwright.async_api import async_playwright
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -25,13 +28,54 @@ INDEED_HEADERS = [
     'SearchQuery', 'QuerySource', 'DateFound', 'Status', 'RemoteScope',
 ]
 
+_RSS_HEADERS = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/120.0.0.0 Safari/537.36"
+    ),
+    "Accept": "application/rss+xml, application/xml, text/xml, */*",
+}
+
+
+def _fetch_rss(url: str):
+    """Fetch an RSS URL synchronously and return raw XML text, or None on error."""
+    req = urllib.request.Request(url, headers=_RSS_HEADERS)
+    try:
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            return resp.read().decode("utf-8", errors="replace")
+    except Exception as exc:
+        print(f"  {RED}RSS fetch error: {exc}{END}")
+        return None
+
+
+def _parse_location_from_description(desc: str) -> str:
+    """Extract 'Location: ...' line from Indeed RSS <description> HTML."""
+    if not desc:
+        return "México"
+    for line in desc.replace("<br>", "\n").replace("<br/>", "\n").splitlines():
+        stripped = line.strip()
+        if stripped.lower().startswith("location:"):
+            return stripped.split(":", 1)[1].strip() or "México"
+    return "México"
+
+
+def _detect_remote(title: str, description: str) -> str:
+    combined = (title + " " + description).lower()
+    if "remot" in combined or "home office" in combined or "trabajo remoto" in combined:
+        return "Remote"
+    if "híbrid" in combined or "hybrid" in combined:
+        return "Hybrid"
+    return "México"
+
+
 class IndeedScraper:
     def __init__(self, headless: bool = None):
-        if headless is None:
-            headless = os.environ.get("PLAYWRIGHT_HEADLESS", "false").lower() == "true"
-        self.headless   = headless
+        # headless param kept for interface compatibility with run_scraper_ci.py
+        # RSS mode does not launch a browser, so this is intentionally ignored.
+        self.headless = headless
         self.jobs_found: list[dict] = []
-        self.dry_run    = True
+        self.dry_run = True
         self.sheet_manager = None
 
     async def run(self, dry_run: bool = True):
@@ -40,109 +84,96 @@ class IndeedScraper:
             self.sheet_manager = SheetManager()
 
         print(f"\n{CYAN}{'='*70}")
-        print(f"INDEED MX SCRAPER")
+        print(f"INDEED MX SCRAPER  (RSS mode — no browser required)")
         print(f"{'='*70}{END}")
         print(f"Mode: {YELLOW}{'DRY RUN' if dry_run else 'LIVE'}{END}\n")
 
-        async with async_playwright() as p:
-            browser = await p.firefox.launch(headless=self.headless)
-            context = await browser.new_context(
-                user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                           "AppleWebKit/537.36 (KHTML, like Gecko) "
-                           "Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800},
-            )
-            page = await context.new_page()
+        for query, source in get_mexico_queries("en"):
+            self._search_rss(query, source, remote=False)
+            await asyncio.sleep(1)
+            self._search_rss(query, source, remote=True)
+            await asyncio.sleep(1)
 
-            try:
-                for query, source in get_mexico_queries("en"):
-                    await self._search(page, query, source)
-                    await asyncio.sleep(4)
+        for query, source in get_latam_queries("en"):
+            self._search_rss(query, source, remote=True)
+            await asyncio.sleep(1)
 
-                for query, source in get_latam_queries("en"):
-                    await self._search(page, query, source)
-                    await asyncio.sleep(4)
+        self._print_summary()
 
-                self._print_summary()
+        if not dry_run and self.jobs_found:
+            self._save_to_sheets()
 
-                if not dry_run and self.jobs_found:
-                    self._save_to_sheets()
-            finally:
-                await browser.close()
+    def _search_rss(self, query: str, query_source: str, remote: bool = False):
+        """Fetch one Indeed RSS page and parse job items into self.jobs_found."""
+        label = f"{query} [remote]" if remote else query
+        print(f"\n{CYAN}[Indeed RSS] Searching: {label}{END}")
 
-    async def _search(self, page, query: str, query_source: str):
-        print(f"\n{CYAN}[Indeed] Searching: {query}{END}")
-        encoded = query.replace(" ", "+")
-        url = f"https://mx.indeed.com/jobs?q={encoded}&l=M%C3%A9xico&remotejob=032b3046-06a3-4876-8dfd-474eb5e7ed11"
+        if remote:
+            q_encoded = urllib.parse.quote_plus(query + " remote")
+            url = f"https://mx.indeed.com/rss?q={q_encoded}&sort=date&fromage=7"
+        else:
+            q_encoded = urllib.parse.quote_plus(query)
+            url = f"https://mx.indeed.com/rss?q={q_encoded}&l=M%C3%A9xico&sort=date&fromage=7"
+
+        xml_text = _fetch_rss(url)
+        if not xml_text:
+            return
+
         try:
-            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
-            await asyncio.sleep(3)
+            root = ET.fromstring(xml_text)
+        except ET.ParseError as exc:
+            print(f"  {RED}RSS parse error: {exc}{END}")
+            return
 
-            # Indeed job cards
-            cards = await page.query_selector_all('[data-jk]')
-            if not cards:
-                cards = await page.query_selector_all('.job_seen_beacon')
-            if not cards:
-                cards = await page.query_selector_all('.resultContent')
+        channel = root.find("channel")
+        if channel is None:
+            print(f"  {YELLOW}No <channel> in RSS response{END}")
+            return
 
-            print(f"  Found {len(cards)} cards")
-            count = 0
+        items = channel.findall("item")
+        print(f"  Found {len(items)} items in RSS feed")
 
-            for card in cards[:20]:
-                try:
-                    # Title
-                    title_el = await card.query_selector('h2.jobTitle span, h2 a span, [data-testid="job-title"]')
-                    title = (await title_el.inner_text()).strip() if title_el else ""
+        count = 0
+        for item in items[:20]:
+            try:
+                title = (item.findtext("title") or "").strip()
+                link  = (item.findtext("link")  or "").strip()
+                # <source> in Indeed RSS carries the company name
+                company_el = item.find("source")
+                company = (company_el.text or "").strip() if company_el is not None else ""
+                description = item.findtext("description") or ""
 
-                    # Company
-                    company_el = await card.query_selector('[data-testid="company-name"], .companyName')
-                    company = (await company_el.inner_text()).strip() if company_el else ""
-
-                    # Location
-                    loc_el = await card.query_selector('[data-testid="text-location"], .companyLocation')
-                    location = (await loc_el.inner_text()).strip() if loc_el else "México"
-
-                    # URL
-                    job_id = await card.get_attribute("data-jk")
-                    apply_url = f"https://mx.indeed.com/viewjob?jk={job_id}" if job_id else ""
-
-                    if not title or not apply_url:
-                        continue
-
-                    # Remote detection
-                    loc_lower = location.lower()
-                    remote = ("Remote" if "remot" in loc_lower
-                              else "Hybrid" if "híbrid" in loc_lower or "hybrid" in loc_lower
-                              else "OnSite")
-
-                    job = {
-                        'Role':        title[:100],
-                        'Company':     company[:100],
-                        'Location':    location[:100],
-                        'ApplyURL':    apply_url,
-                        'Source':      'Indeed MX',
-                        'SearchQuery': query,
-                        'QuerySource': query_source,
-                        'DateFound':   datetime.now().strftime('%Y-%m-%d'),
-                        'Status':      'New',
-                        'RemoteScope': remote,
-                    }
-                    self.jobs_found.append(job)
-                    count += 1
-                except Exception as e:
+                if not title or not link:
                     continue
 
-            print(f"  {GREEN}Found {count} jobs{END}")
+                location     = _parse_location_from_description(description)
+                remote_scope = _detect_remote(title, description)
 
-        except Exception as e:
-            print(f"  {RED}Error searching '{query}': {e}{END}")
+                job = {
+                    'Role':        title[:100],
+                    'Company':     company[:100],
+                    'Location':    location[:100],
+                    'ApplyURL':    link,
+                    'Source':      'Indeed MX',
+                    'SearchQuery': query,
+                    'QuerySource': query_source,
+                    'DateFound':   datetime.now().strftime('%Y-%m-%d'),
+                    'Status':      'New',
+                    'RemoteScope': remote_scope,
+                }
+                self.jobs_found.append(job)
+                count += 1
+            except Exception:
+                continue
+
+        print(f"  {GREEN}Parsed {count} jobs{END}")
 
     def _print_summary(self):
         print(f"\n{CYAN}{'='*70}")
         print(f"INDEED SCRAPING SUMMARY")
         print(f"{'='*70}{END}")
         print(f"  Total: {GREEN}{len(self.jobs_found)}{END}")
-        by_source = {}
+        by_source: dict[str, int] = {}
         for j in self.jobs_found:
             k = j['QuerySource']
             by_source[k] = by_source.get(k, 0) + 1
@@ -153,7 +184,7 @@ class IndeedScraper:
         print(f"\n{CYAN}Saving to Google Sheets → Indeed tab...{END}")
         try:
             self.sheet_manager.ensure_headers('indeed', INDEED_HEADERS)
-            existing_urls = set()
+            existing_urls: set[str] = set()
             try:
                 rows = self.sheet_manager.get_all_jobs(tab='indeed')
                 existing_urls = {r.get('ApplyURL', '') for r in rows}
@@ -167,13 +198,13 @@ class IndeedScraper:
 
             tab_name = self.sheet_manager.tabs['indeed']
             headers  = self.sheet_manager._get_headers(tab_name)
-            rows     = [[str(j.get(h, '') or '') for h in headers] for j in new_jobs]
+            rows_out = [[str(j.get(h, '') or '') for h in headers] for j in new_jobs]
             self.sheet_manager.service.spreadsheets().values().append(
                 spreadsheetId=self.sheet_manager.spreadsheet_id,
                 range=f"{tab_name}!A2",
                 valueInputOption="USER_ENTERED",
                 insertDataOption="INSERT_ROWS",
-                body={"values": rows},
+                body={"values": rows_out},
             ).execute()
             print(f"  {GREEN}Saved {len(new_jobs)} new jobs to Indeed tab{END}")
         except Exception as e:

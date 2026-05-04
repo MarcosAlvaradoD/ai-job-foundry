@@ -13,6 +13,11 @@ from core.sheets.sheet_manager import SheetManager
 from dotenv import load_dotenv
 import os
 
+# ── Límites de ejecución para evitar timeout en GitHub Actions ───────────────
+# GHA timeout del step: 40 min → damos 37 min de margen
+MAX_JOBS_PER_RUN  = 160    # máx jobs por ejecución (el resto se scorea mañana)
+MAX_RUN_SECONDS   = 37 * 60  # 37 minutos → sale antes del timeout de 40 min
+
 # Windows UTF-8
 if sys.platform == "win32":
     import io
@@ -267,75 +272,101 @@ def main():
     
     print(f"✅ Found {len(jobs)} total jobs\n")
     
-    # Filter: sin score, score fallido, o generado por Ollama (no confiable)
+    # Filter: SOLO jobs sin score válido todavía.
+    # Regla: si ya tiene un FitScore numérico > 0 → no tocar, sin importar qué backend lo generó.
+    # Esto evita re-procesar cientos de jobs ya calificados en runs anteriores.
     pending = []
     for j in jobs:
         fit = j.get('FitScore')
         why = str(j.get('Why', ''))
-        no_score    = not fit or fit == 0 or str(fit).strip() == ''
-        bad_score   = 'AI unavailable' in why or why.startswith('Error:')
-        ollama_score = '[Ollama local]' in why  # Ollama da scores genéricos, re-procesar
-        if no_score or bad_score or ollama_score:
+        try:
+            fit_val = float(str(fit).strip()) if fit else 0
+        except (ValueError, TypeError):
+            fit_val = 0
+        no_score  = fit_val == 0 or str(fit).strip() == ''
+        bad_score = 'AI unavailable' in why and fit_val == 0  # solo re-intentar si no hay score
+        if no_score or bad_score:
             pending.append(j)
 
     if not pending:
         print("✅ All jobs have valid FIT scores!")
         return
     
-    print(f"📋 {len(pending)} jobs need FIT scores\n")
+    # Cap por run — el resto se procesa en la siguiente ejecución
+    total_pending = len(pending)
+    if total_pending > MAX_JOBS_PER_RUN:
+        print(f"⚠️  {total_pending} jobs pendientes — limitando a {MAX_JOBS_PER_RUN} por run")
+        print(f"   Los {total_pending - MAX_JOBS_PER_RUN} restantes se procesarán mañana.")
+        pending = pending[:MAX_JOBS_PER_RUN]
+
+    print(f"📋 Procesando {len(pending)} de {total_pending} jobs\n")
     print("="*70)
-    
-    processed = 0
-    errors = 0
-    
+
+    run_start  = time.time()
+    processed  = 0
+    errors     = 0
+    time_exits = 0
+
     for i, job in enumerate(pending, 1):
+        # ── Time budget: salir limpio si quedan < 3 min ──────────────────
+        elapsed = time.time() - run_start
+        remaining = MAX_RUN_SECONDS - elapsed
+        if remaining < 180:
+            print(f"\n⏱️  Tiempo límite alcanzado ({elapsed/60:.1f} min) — "
+                  f"procesados {processed}/{len(pending)} jobs.")
+            print(f"   Los {len(pending) - i + 1} restantes se scorearán mañana.")
+            time_exits = len(pending) - i + 1
+            break
+
         try:
-            role = job.get('Role', 'Unknown')
+            role    = job.get('Role',    'Unknown')
             company = job.get('Company', 'Unknown')
-            row = job.get('_row', 0)
-            
-            print(f"\n[{i}/{len(pending)}] {role} @ {company}")
+            row     = job.get('_row', 0)
+
+            print(f"\n[{i}/{len(pending)}] {role} @ {company}  "
+                  f"(⏱ {elapsed/60:.1f}m/{MAX_RUN_SECONDS/60:.0f}m)")
             print(f"   Row: {row}")
-            
+
             # Analyze
             print(f"   🤖 Analyzing...")
             result = analyze_with_ai(job)
-            
+
             print(f"   ✅ FIT: {result['fit_score']}/10")
-            
+
             # Save
             print(f"   💾 Saving...")
             updates = {
-                'FitScore': result['fit_score'],
-                'Why': result['why'],
-                'Seniority': result['seniority']
+                'FitScore':  result['fit_score'],
+                'Why':       result['why'],
+                'Seniority': result['seniority'],
             }
-            
-            sheet_manager.update_job(row, updates, 'linkedin')  # ✅ minúscula para coincidir con self.tabs
-            
+            sheet_manager.update_job(row, updates, 'linkedin')
             print(f"   ✅ Saved!")
             processed += 1
-            
+
             # Sleep dinámico según el backend activo
             active_url = _active_backend()["url"]
             if "127.0.0.1" in active_url or "localhost" in active_url:
-                sleep_secs = 2   # Ollama local — sin límite
+                sleep_secs = 2    # Ollama local — sin límite de API
             elif "google" in active_url:
-                sleep_secs = 4   # Gemini — 15 rpm → 4s entre requests
+                sleep_secs = 4    # Gemini Flash — 15 rpm → ~4s
             else:
-                sleep_secs = 13  # NVIDIA NIM — ~5 rpm → 13s entre requests
+                sleep_secs = 8    # NVIDIA NIM — reducido 13→8s (era muy conservador)
             time.sleep(sleep_secs)
-            
+
         except Exception as e:
             print(f"   ❌ Error: {e}")
             errors += 1
             continue
-    
+
+    total_elapsed = time.time() - run_start
     print("\n" + "="*70)
     print("📊 SUMMARY")
     print("="*70)
-    print(f"Processed: {processed}")
-    print(f"Errors: {errors}")
+    print(f"Procesados:  {processed}")
+    print(f"Errores:     {errors}")
+    print(f"Pendientes:  {time_exits + (total_pending - MAX_JOBS_PER_RUN if total_pending > MAX_JOBS_PER_RUN else 0)}")
+    print(f"Tiempo total: {total_elapsed/60:.1f} min")
     print("="*70)
     
     if processed > 0:

@@ -78,7 +78,7 @@ jobs:
       # ── 6. Calcular FIT scores con IA ───────────────────────────────────────
       - name: Calculate FIT scores (Gemini → NVIDIA NIM fallback)
         run: python scripts/maintenance/calculate_linkedin_fit_scores.py
-        timeout-minutes: 25
+        timeout-minutes: 40
 
       # ── 7. Limpiar credenciales del runner (seguridad) ───────────────────────
       - name: Cleanup credentials

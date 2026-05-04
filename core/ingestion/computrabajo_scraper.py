@@ -7,6 +7,7 @@ Escribe resultados directamente a la pestaña "Computrabajo" de Google Sheets.
 No requiere autenticación — Computrabajo es público.
 """
 import sys, os, asyncio
+import urllib.parse
 from pathlib import Path
 from datetime import datetime
 from playwright.async_api import async_playwright
@@ -23,6 +24,18 @@ CYAN  = '\033[96m'; END = '\033[0m'
 COMPUTRABAJO_HEADERS = [
     'Role', 'Company', 'Location', 'ApplyURL', 'Source',
     'SearchQuery', 'QuerySource', 'DateFound', 'Status', 'RemoteScope',
+]
+
+_LOG_DIR = PROJECT_ROOT / "logs"
+
+# Card selectors to try in priority order (Computrabajo changes markup frequently)
+_CARD_SELECTORS = [
+    'article[data-id]',
+    '[class*="OfferCard"]',
+    '.offerBlock',
+    'article.box_offer',
+    '[data-cy="offer-list-item"]',
+    '.of-base',
 ]
 
 
@@ -51,7 +64,7 @@ class ComputrabajoScraper:
                 user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
                            "AppleWebKit/537.36 (KHTML, like Gecko) "
                            "Chrome/120.0.0.0 Safari/537.36",
-                viewport={"width": 1280, "height": 800},
+                viewport={"width": 1280, "height": 900},
             )
             page = await context.new_page()
 
@@ -71,64 +84,95 @@ class ComputrabajoScraper:
             finally:
                 await browser.close()
 
+    async def _find_cards(self, page):
+        """Try all card selectors and return the first non-empty match."""
+        for sel in _CARD_SELECTORS:
+            try:
+                cards = await page.query_selector_all(sel)
+                if cards:
+                    print(f"  Selector matched '{sel}': {len(cards)} cards")
+                    return cards
+            except Exception:
+                continue
+        return []
+
     async def _search(self, page, query: str, query_source: str):
         print(f"\n{CYAN}[Computrabajo] Searching: {query}{END}")
-        encoded = query.lower().replace(" ", "-")
-        url = f"https://www.computrabajo.com.mx/trabajo-de-{encoded}"
-        try:
-            await page.goto(url, timeout=30000, wait_until="domcontentloaded")
-            await asyncio.sleep(3)
 
-            # Wait for job listings to appear
+        encoded_q = urllib.parse.quote_plus(query)
+        slug      = query.lower().replace(" ", "-")
+
+        # Primary URL: search endpoint with remote filter (r=10)
+        url = f"https://www.computrabajo.com.mx/ofertas-de-trabajo?q={encoded_q}&r=10"
+
+        try:
+            await page.goto(url, timeout=40000, wait_until="domcontentloaded")
+            # Let JS finish rendering
             try:
-                await page.wait_for_selector(
-                    'article.box_offer, [data-cy="offer-list-item"], .of-base',
-                    timeout=10000,
-                )
+                await page.wait_for_load_state("networkidle", timeout=15000)
             except Exception:
                 pass
+            await asyncio.sleep(5)
+            # Scroll to trigger lazy-loaded cards
+            await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+            await asyncio.sleep(2)
 
-            # Computrabajo job cards
-            cards = await page.query_selector_all('article.box_offer')
-            if not cards:
-                cards = await page.query_selector_all('[data-cy="offer-list-item"]')
-            if not cards:
-                cards = await page.query_selector_all('.of-base')
+            cards = await self._find_cards(page)
 
-            print(f"  Found {len(cards)} cards")
+            if not cards:
+                # Save debug screenshot for CI artifact inspection
+                _LOG_DIR.mkdir(exist_ok=True)
+                debug_path = _LOG_DIR / f"debug_computrabajo_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                try:
+                    await page.screenshot(path=str(debug_path), full_page=True)
+                    print(f"  {YELLOW}0 cards on primary URL — screenshot: {debug_path.name}{END}")
+                except Exception:
+                    pass
+
+                # Fallback: slug-based URL
+                url2 = f"https://www.computrabajo.com.mx/trabajo-de-{slug}?r=10"
+                print(f"  {YELLOW}Trying fallback: {url2}{END}")
+                await page.goto(url2, timeout=40000, wait_until="domcontentloaded")
+                try:
+                    await page.wait_for_load_state("networkidle", timeout=15000)
+                except Exception:
+                    pass
+                await asyncio.sleep(5)
+                await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+                await asyncio.sleep(2)
+                cards = await self._find_cards(page)
+
+            print(f"  Total cards found: {len(cards)}")
             count = 0
 
             for card in cards[:20]:
                 try:
                     # Title
-                    title_el = await card.query_selector('h2.title a, [data-cy="title"]')
+                    title_el = await card.query_selector('h2 a, .tO > a, [class*="title"] a')
                     title = (await title_el.inner_text()).strip() if title_el else ""
 
                     # Company
-                    company_el = await card.query_selector('p.dO_fi, [data-cy="company"]')
+                    company_el = await card.query_selector('[class*="company"], .dO > p:first-child, p.dO_fi')
                     company = (await company_el.inner_text()).strip() if company_el else ""
 
                     # Location
-                    loc_el = await card.query_selector('span.dO_fi, [data-cy="location"]')
+                    loc_el = await card.query_selector('[class*="location"], .dO > p:last-child, span.dO_fi')
                     location = (await loc_el.inner_text()).strip() if loc_el else "México"
 
-                    # URL — get href from title link
+                    # URL — href from title anchor
                     apply_url = ""
                     if title_el:
                         href = await title_el.get_attribute("href")
                         if href:
-                            if href.startswith("http"):
-                                apply_url = href
-                            else:
-                                apply_url = "https://www.computrabajo.com.mx" + href
+                            apply_url = (href if href.startswith("http")
+                                         else "https://www.computrabajo.com.mx" + href)
 
                     if not title or not apply_url:
                         continue
 
-                    # Remote detection
                     loc_lower = location.lower()
-                    remote = ("Remote" if "remot" in loc_lower or "home office" in loc_lower
-                              else "Hybrid" if "híbrid" in loc_lower or "hybrid" in loc_lower
+                    remote = ("Remote" if ("remot" in loc_lower or "home office" in loc_lower)
+                              else "Hybrid" if ("híbrid" in loc_lower or "hybrid" in loc_lower)
                               else "OnSite")
 
                     job = {
@@ -158,7 +202,7 @@ class ComputrabajoScraper:
         print(f"COMPUTRABAJO SCRAPING SUMMARY")
         print(f"{'='*70}{END}")
         print(f"  Total: {GREEN}{len(self.jobs_found)}{END}")
-        by_source = {}
+        by_source: dict[str, int] = {}
         for j in self.jobs_found:
             k = j['QuerySource']
             by_source[k] = by_source.get(k, 0) + 1
@@ -169,7 +213,7 @@ class ComputrabajoScraper:
         print(f"\n{CYAN}Saving to Google Sheets → Computrabajo tab...{END}")
         try:
             self.sheet_manager.ensure_headers('computrabajo', COMPUTRABAJO_HEADERS)
-            existing_urls = set()
+            existing_urls: set[str] = set()
             try:
                 rows = self.sheet_manager.get_all_jobs(tab='computrabajo')
                 existing_urls = {r.get('ApplyURL', '') for r in rows}
@@ -183,13 +227,13 @@ class ComputrabajoScraper:
 
             tab_name = self.sheet_manager.tabs['computrabajo']
             headers  = self.sheet_manager._get_headers(tab_name)
-            rows     = [[str(j.get(h, '') or '') for h in headers] for j in new_jobs]
+            rows_out = [[str(j.get(h, '') or '') for h in headers] for j in new_jobs]
             self.sheet_manager.service.spreadsheets().values().append(
                 spreadsheetId=self.sheet_manager.spreadsheet_id,
                 range=f"{tab_name}!A2",
                 valueInputOption="USER_ENTERED",
                 insertDataOption="INSERT_ROWS",
-                body={"values": rows},
+                body={"values": rows_out},
             ).execute()
             print(f"  {GREEN}Saved {len(new_jobs)} new jobs to Computrabajo tab{END}")
         except Exception as e:
