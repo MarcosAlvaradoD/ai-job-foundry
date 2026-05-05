@@ -205,12 +205,17 @@ class SheetManager:
             Lista de diccionarios con ofertas
         """
         tab_name = self.tabs.get(tab, "Registry")
-        
-        # Leer toda la pestaña
-        result = self.service.spreadsheets().values().get(
-            spreadsheetId=self.spreadsheet_id,
-            range=f"{tab_name}!A1:Z1000"  # Leer hasta 1000 filas
-        ).execute()
+
+        # Leer toda la pestaña — atrapar 400 si el tab no existe aún
+        try:
+            result = self.service.spreadsheets().values().get(
+                spreadsheetId=self.spreadsheet_id,
+                range=f"{tab_name}!A1:Z1000"
+            ).execute()
+        except Exception as e:
+            if "400" in str(e) or "Unable to parse range" in str(e):
+                return []   # tab no existe todavía
+            raise
         
         values = result.get('values', [])
         
