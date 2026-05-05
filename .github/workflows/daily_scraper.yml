@@ -18,6 +18,8 @@ env:
   LINKEDIN_EMAIL:   ${{ secrets.LINKEDIN_EMAIL }}
   NVIDIA_API_KEY:   ${{ secrets.NVIDIA_API_KEY }}
   GEMINI_API_KEY:   ${{ secrets.GEMINI_API_KEY }}
+  ADZUNA_APP_ID:    ${{ secrets.ADZUNA_APP_ID }}
+  ADZUNA_APP_KEY:   ${{ secrets.ADZUNA_APP_KEY }}
   PROJECT_ROOT:     ${{ github.workspace }}
 
 jobs:
@@ -115,6 +117,7 @@ jobs:
           indeed_count = 0
           computrabajo_count = 0
           occ_count = 0
+          adzuna_count = 0
           logs = sorted(glob.glob('logs/scraper_*.log'))
           if logs:
               with open(logs[-1], encoding='utf-8', errors='ignore') as f:
@@ -134,6 +137,9 @@ jobs:
                       mo = re.search(r'OCC=(\d+)', line)
                       if mo:
                           occ_count = int(mo.group(1))
+                      ma = re.search(r'Adzuna=(\d+)', line)
+                      if ma:
+                          adzuna_count = int(ma.group(1))
 
           today = datetime.utcnow().strftime('%d/%m/%Y')
           status = "✅ Éxito" if total > 0 else "⚠️ Sin resultados"
@@ -143,11 +149,12 @@ jobs:
               f"{status}\n\n"
               f"🔍 <b>{total}</b> jobs encontrados\n"
               f"  • LinkedIn: {linkedin_count}\n"
-              f"  • Indeed: {indeed_count}\n"
               f"  • Computrabajo: {computrabajo_count}\n"
-              f"  • OCC Mundial: {occ_count}\n"
+              f"  • Adzuna: {adzuna_count}\n"
+              f"  • OCC: {occ_count}\n"
+              f"  • Indeed: {indeed_count}\n"
               f"📋 Modo: {mode.upper()}\n"
-              f"📊 Revisa Google Sheets → LinkedIn / Indeed / Computrabajo / OCC\n\n"
+              f"📊 Revisa Google Sheets → LinkedIn / Computrabajo / Adzuna / OCC\n\n"
               f"<i>Siguiente scraping: mañana 10am MX</i>"
           )
 

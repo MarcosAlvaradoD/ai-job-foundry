@@ -33,16 +33,15 @@ OCC_HEADERS = [
 _BASE_URL  = "https://www.occ.com.mx"
 _LOG_DIR   = PROJECT_ROOT / "logs"
 
-# CSS card selectors to try in priority order
-# TODO: confirm exact selectors from DevTools inspection
+# CSS card selectors — confirmed from DevTools inspection 2026-05-05
+# Primary: aside elements with data-offers-grid-offer-item-container attribute
+# Fallback: id^="jobcard-" pattern, then generic class guesses
 _CARD_SELECTORS = [
+    'aside[data-offers-grid-offer-item-container]',  # confirmed from DevTools
+    '[id^="jobcard-"]',                              # id="jobcard-{id}" pattern
+    '[data-offers-grid-offer-item-container]',       # same attr without tag
     '[class*="CardJob"]',
-    '[class*="card-job"]',
-    '[class*="JobCard"]',
     'article[class*="job"]',
-    '[data-testid*="job"]',
-    '[class*="listado"] > div',
-    '.card',
 ]
 
 
@@ -221,34 +220,41 @@ class OccScraper:
             count = 0
             for card in cards[:20]:
                 try:
-                    # Title — try multiple selector patterns
+                    # Title — confirmed selector from DevTools: h2.text-text-grey-900
                     title_el = await card.query_selector(
-                        'h2 a, h3 a, [class*="title"] a, [class*="Title"] a, '
-                        '[class*="name"] a, [class*="Name"] a, a[class*="job"]'
+                        'h2.text-text-grey-900, h2[class*="text-lg"], h2, h3'
                     )
                     title = (await title_el.inner_text()).strip() if title_el else ""
 
-                    # Company
+                    # Company — look for anchor/span below title in card grid
                     company_el = await card.query_selector(
                         '[class*="company"], [class*="Company"], '
-                        '[class*="empresa"], [class*="Empresa"]'
+                        '[class*="empresa"], [class*="Empresa"], '
+                        'a[href*="/empresa/"], span[class*="font-semibold"]'
                     )
                     company = (await company_el.inner_text()).strip() if company_el else ""
 
-                    # Location
+                    # Location — look for location text
                     loc_el = await card.query_selector(
                         '[class*="location"], [class*="Location"], '
-                        '[class*="lugar"], [class*="ciudad"], [class*="Ciudad"]'
+                        '[class*="ciudad"], [class*="Ciudad"], '
+                        'span[class*="text-grey"][class*="font-light"]'
                     )
                     location = (await loc_el.inner_text()).strip() if loc_el else "México"
 
-                    # URL
+                    # URL — prefer <a> href, fallback to data-blind job ID
                     apply_url = ""
-                    if title_el:
-                        href = await title_el.get_attribute("href")
+                    # Try direct anchor first
+                    link_el = await card.query_selector('a[href*="/empleo"]')
+                    if link_el:
+                        href = await link_el.get_attribute("href")
                         if href:
-                            apply_url = (href if href.startswith("http")
-                                         else f"{_BASE_URL}{href}")
+                            apply_url = href if href.startswith("http") else f"{_BASE_URL}{href}"
+                    # Fallback: build URL from data-blind job ID
+                    if not apply_url:
+                        job_id = await card.get_attribute("data-blind")
+                        if job_id:
+                            apply_url = f"{_BASE_URL}/empleo/{job_id}/"
 
                     if not title or not apply_url:
                         continue
