@@ -245,61 +245,73 @@ Responde SOLO en JSON:
     return {"fit_score": 5, "why": "AI unavailable (all backends exhausted)", "seniority": "Unknown"}
 
 
+
+# Tabs a scorear en orden — LinkedIn primero (ya tiene historial), luego los nuevos
+TABS_TO_SCORE = ['linkedin', 'computrabajo', 'adzuna', 'occ']
+
+
+def _collect_pending(sheet_manager, tabs: list) -> list:
+    """Lee todos los tabs y devuelve jobs sin FIT score válido, con _source_tab."""
+    pending = []
+    for tab_key in tabs:
+        try:
+            jobs = sheet_manager.get_all_jobs(tab_key)
+            if not jobs:
+                print(f"  {tab_key}: 0 jobs (tab vacío o no existe)")
+                continue
+            for i, job in enumerate(jobs, start=2):
+                job['_row'] = i
+                job['_source_tab'] = tab_key
+            # Filtrar sin score
+            tab_pending = []
+            for j in jobs:
+                fit = j.get('FitScore')
+                why = str(j.get('Why', ''))
+                try:
+                    fit_val = float(str(fit).strip()) if fit else 0
+                except (ValueError, TypeError):
+                    fit_val = 0
+                no_score  = fit_val == 0 or str(fit).strip() == ''
+                bad_score = 'AI unavailable' in why and fit_val == 0
+                if no_score or bad_score:
+                    tab_pending.append(j)
+            print(f"  {tab_key}: {len(jobs)} total, {len(tab_pending)} sin score")
+            pending.extend(tab_pending)
+        except Exception as e:
+            print(f"  {tab_key}: Error leyendo tab — {e}")
+    return pending
+
+
 def main():
     print("\n" + "="*70)
-    print("🎯 CALCULATE FIT SCORES - LINKEDIN TAB")
+    print("🎯 CALCULATE FIT SCORES - ALL TABS")
     print("="*70)
     print(f"Sheet:   {SHEET_ID}")
+    print(f"Tabs:    {', '.join(TABS_TO_SCORE)}")
     print(f"Backends disponibles ({len(BACKENDS)}):")
     for i, b in enumerate(BACKENDS):
         marker = "▶" if i == 0 else " "
         print(f"  {marker} [{i+1}] {b['name']} — {b['model']}")
     print("="*70 + "\n")
-    
+
     sheet_manager = SheetManager()
-    
-    # Read LinkedIn tab
-    print("📊 Reading LinkedIn tab...")
-    jobs = sheet_manager.get_all_jobs('linkedin')  # ✅ CORRECTO: get_all_jobs() no read_tab()
-    
-    # Add row numbers (starts at 2, after headers)
-    for i, job in enumerate(jobs, start=2):
-        job['_row'] = i
-    
-    if not jobs:
-        print("❌ No jobs in LinkedIn tab")
-        return
-    
-    print(f"✅ Found {len(jobs)} total jobs\n")
-    
-    # Filter: SOLO jobs sin score válido todavía.
-    # Regla: si ya tiene un FitScore numérico > 0 → no tocar, sin importar qué backend lo generó.
-    # Esto evita re-procesar cientos de jobs ya calificados en runs anteriores.
-    pending = []
-    for j in jobs:
-        fit = j.get('FitScore')
-        why = str(j.get('Why', ''))
-        try:
-            fit_val = float(str(fit).strip()) if fit else 0
-        except (ValueError, TypeError):
-            fit_val = 0
-        no_score  = fit_val == 0 or str(fit).strip() == ''
-        bad_score = 'AI unavailable' in why and fit_val == 0  # solo re-intentar si no hay score
-        if no_score or bad_score:
-            pending.append(j)
+
+    print("📊 Leyendo tabs...")
+    pending = _collect_pending(sheet_manager, TABS_TO_SCORE)
 
     if not pending:
-        print("✅ All jobs have valid FIT scores!")
+        print("\n✅ All jobs have valid FIT scores across all tabs!")
         return
-    
-    # Cap por run — el resto se procesa en la siguiente ejecución
+
     total_pending = len(pending)
+
+    # Cap por run — el resto se procesa en la siguiente ejecución
     if total_pending > MAX_JOBS_PER_RUN:
-        print(f"⚠️  {total_pending} jobs pendientes — limitando a {MAX_JOBS_PER_RUN} por run")
+        print(f"\n⚠️  {total_pending} jobs pendientes — limitando a {MAX_JOBS_PER_RUN} por run")
         print(f"   Los {total_pending - MAX_JOBS_PER_RUN} restantes se procesarán mañana.")
         pending = pending[:MAX_JOBS_PER_RUN]
 
-    print(f"📋 Procesando {len(pending)} de {total_pending} jobs\n")
+    print(f"\n📋 Procesando {len(pending)} de {total_pending} jobs\n")
     print("="*70)
 
     run_start  = time.time()
@@ -309,7 +321,7 @@ def main():
 
     for i, job in enumerate(pending, 1):
         # ── Time budget: salir limpio si quedan < 3 min ──────────────────
-        elapsed = time.time() - run_start
+        elapsed   = time.time() - run_start
         remaining = MAX_RUN_SECONDS - elapsed
         if remaining < 180:
             print(f"\n⏱️  Tiempo límite alcanzado ({elapsed/60:.1f} min) — "
@@ -319,11 +331,12 @@ def main():
             break
 
         try:
-            role    = job.get('Role',    'Unknown')
-            company = job.get('Company', 'Unknown')
-            row     = job.get('_row', 0)
+            role       = job.get('Role',    'Unknown')
+            company    = job.get('Company', 'Unknown')
+            row        = job.get('_row', 0)
+            source_tab = job.get('_source_tab', 'linkedin')
 
-            print(f"\n[{i}/{len(pending)}] {role} @ {company}  "
+            print(f"\n[{i}/{len(pending)}] [{source_tab}] {role} @ {company}  "
                   f"(⏱ {elapsed/60:.1f}m/{MAX_RUN_SECONDS/60:.0f}m)")
             print(f"   Row: {row}")
 
@@ -333,14 +346,14 @@ def main():
 
             print(f"   ✅ FIT: {result['fit_score']}/10")
 
-            # Save
-            print(f"   💾 Saving...")
+            # Save to correct tab
+            print(f"   💾 Saving → {source_tab}...")
             updates = {
                 'FitScore':  result['fit_score'],
                 'Why':       result['why'],
                 'Seniority': result['seniority'],
             }
-            sheet_manager.update_job(row, updates, 'linkedin')
+            sheet_manager.update_job(row, updates, source_tab)
             print(f"   ✅ Saved!")
             processed += 1
 
@@ -351,7 +364,7 @@ def main():
             elif "google" in active_url:
                 sleep_secs = 4    # Gemini Flash — 15 rpm → ~4s
             else:
-                sleep_secs = 8    # NVIDIA NIM — reducido 13→8s (era muy conservador)
+                sleep_secs = 8    # NVIDIA NIM
             time.sleep(sleep_secs)
 
         except Exception as e:
@@ -365,10 +378,10 @@ def main():
     print("="*70)
     print(f"Procesados:  {processed}")
     print(f"Errores:     {errors}")
-    print(f"Pendientes:  {time_exits + (total_pending - MAX_JOBS_PER_RUN if total_pending > MAX_JOBS_PER_RUN else 0)}")
+    print(f"Pendientes:  {time_exits + max(0, total_pending - MAX_JOBS_PER_RUN)}")
     print(f"Tiempo total: {total_elapsed/60:.1f} min")
     print("="*70)
-    
+
     if processed > 0:
         print("\n✅ FIT scores calculated!")
         print(f"\nView: https://docs.google.com/spreadsheets/d/{SHEET_ID}/edit#gid=0")

@@ -413,9 +413,10 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
 
 
 def update_sheet_status(sheet_manager, job: dict, status: str, notes: str = ""):
-    """Update job status in Google Sheets"""
+    """Update job status in Google Sheets (uses _source_tab to write to the right tab)."""
     try:
-        today = datetime.now().strftime("%Y-%m-%d")
+        today    = datetime.now().strftime("%Y-%m-%d")
+        tab_key  = job.get('_source_tab', 'linkedin')
         sheet_manager.update_job(
             job.get('_row', 0),
             {
@@ -423,11 +424,70 @@ def update_sheet_status(sheet_manager, job: dict, status: str, notes: str = ""):
                 'NextAction': notes or status,
                 'SLA_Date': today,
             },
-            tab='linkedin'
+            tab=tab_key,
         )
-        print(f"  [SHEET] Status updated to '{status}'")
+        print(f"  [SHEET] Status updated to '{status}' (tab: {tab_key})")
     except Exception as e:
         print(f"  [SHEET WARN] Could not update status: {e}")
+
+
+def apply_external_direct(job: dict, submit: bool, headless: bool) -> tuple[bool, str]:
+    """Apply directly to an external ATS URL (Computrabajo, OCC, Adzuna jobs).
+
+    These jobs have URLs that go straight to Workable/Greenhouse/Lever/etc.
+    We use ExternalApplier directly — no LinkedIn session needed.
+    """
+    import asyncio
+    from playwright.async_api import async_playwright as _async_pw
+    from core.automation.auto_apply_external import ExternalApplier
+
+    url     = job.get('ApplyURL', '')
+    company = job.get('Company', 'Unknown')
+    role    = job.get('Role', 'Unknown')
+    fit     = job.get('FitScore', '?')
+    source  = job.get('_source_tab', 'external')
+
+    print(f"\n{'='*70}")
+    print(f"[APPLY-EXT] {company} - {role}")
+    print(f"[FIT]       {fit}/10  |  [SOURCE] {source}")
+    print(f"[URL]       {url}")
+    print(f"[MODE]      {'SUBMIT' if submit else 'DRY-RUN'}")
+    print(f"{'='*70}")
+
+    async def _run():
+        applier = ExternalApplier()
+        # Use customized CV if pre-generated (FIT >= 8)
+        if job.get('_cv_path'):
+            from pathlib import Path as _Path
+            cv_path_str = str(job['_cv_path'])
+            if _Path(cv_path_str).exists():
+                applier.cv['resume_path'] = cv_path_str
+                print(f"  [CV] Using custom CV: {_Path(cv_path_str).name}")
+
+        async with _async_pw() as pw:
+            browser = await pw.chromium.launch(
+                headless=headless,
+                args=['--disable-blink-features=AutomationControlled', '--disable-dev-shm-usage']
+            )
+            ctx  = await browser.new_context(
+                viewport={'width': 1280, 'height': 900},
+                user_agent=(
+                    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+                    'AppleWebKit/537.36 (KHTML, like Gecko) '
+                    'Chrome/124.0.0.0 Safari/537.36'
+                ),
+            )
+            page = await ctx.new_page()
+            try:
+                result = await applier.apply(page, job, submit=submit)
+            finally:
+                await browser.close()
+            return result
+
+    try:
+        return asyncio.run(_run())
+    except Exception as e:
+        return False, f"External direct apply error: {e}"
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────
@@ -528,66 +588,86 @@ def main():
 
     # Start browser
     results = {'applied': 0, 'failed': 0, 'skipped': 0}
+    applied_jobs = []
+    error_jobs   = []
 
-    with sync_playwright() as p:
-        browser = p.chromium.launch(
-            headless=args.headless,
-            args=['--disable-blink-features=AutomationControlled', '--disable-dev-shm-usage']
-        )
-        context = browser.new_context(
-            viewport={'width': 1920, 'height': 1080},
-            user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-                       '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
-        )
-        page = context.new_page()
+    # ── Split jobs by apply route ─────────────────────────────────────────────
+    linkedin_jobs = [j for j in jobs_to_process
+                     if 'linkedin.com' in j.get('ApplyURL', '').lower()]
+    external_jobs = [j for j in jobs_to_process
+                     if 'linkedin.com' not in j.get('ApplyURL', '').lower()]
 
-        if not applier.ensure_linkedin_session(context, page):
-            print("[ERROR] Could not establish LinkedIn session!")
-            browser.close()
-            return
+    log.info(f"Routing: {len(linkedin_jobs)} LinkedIn jobs | "
+             f"{len(external_jobs)} direct external jobs")
 
-        log.info("LinkedIn session active — starting applications...")
-
-        applied_jobs = []   # para el resumen de Telegram
-        error_jobs   = []
-
-        for job in jobs_to_process:
-            company = job.get('Company', 'Unknown')
-            role    = job.get('Role', 'Unknown')
-            fit     = job.get('FitScore', '?')
-
-            ok, reason = apply_to_job_with_submit(
-                applier, job, page,
-                submit=args.submit,
-                try_external=getattr(args, 'external', False),
-            )
-
-            if ok and args.submit:
-                results['applied'] += 1
-                applied_jobs.append(f"• {company} — {role} (FIT {fit})")
-                if job.get('_row', 0) > 0:
-                    update_sheet_status(applier.sheet_manager, job, 'Applied', reason)
-                else:
-                    log.info("Sheet skip (direct --job-id mode)")
-                task_text = job.get('_task_text', job.get('Company', ''))
-                mark_task_done(task_text[:50])
-            elif ok:
-                results['applied'] += 1  # dry-run success
-                applied_jobs.append(f"• {company} — {role} [DRY-RUN]")
-            elif any(k in reason.lower() for k in ('skip', 'already', 'not easy', 'no url', 'captcha')):
-                results['skipped'] += 1
-                log.info(f"Skipped: {company} — {reason}")
+    # ── Helper: record result ─────────────────────────────────────────────────
+    def record(job, ok, reason):
+        company = job.get('Company', 'Unknown')
+        role    = job.get('Role', 'Unknown')
+        fit     = job.get('FitScore', '?')
+        if ok and args.submit:
+            results['applied'] += 1
+            applied_jobs.append(f"• {company} — {role} (FIT {fit})")
+            if job.get('_row', 0) > 0:
+                update_sheet_status(applier.sheet_manager, job, 'Applied', reason)
             else:
-                results['failed'] += 1
-                error_jobs.append(f"• {company} — {role}: {reason}")
-                log.warning(f"Failed: {company} — {reason}")
+                log.info("Sheet skip (direct --job-id mode)")
+            mark_task_done(job.get('_task_text', job.get('Company', ''))[:50])
+        elif ok:
+            results['applied'] += 1
+            applied_jobs.append(f"• {company} — {role} [DRY-RUN]")
+        elif any(k in reason.lower() for k in ('skip', 'already', 'not easy', 'no url', 'captcha')):
+            results['skipped'] += 1
+            log.info(f"Skipped: {company} — {reason}")
+        else:
+            results['failed'] += 1
+            error_jobs.append(f"• {company} — {role}: {reason}")
+            log.warning(f"Failed: {company} — {reason}")
 
-            time.sleep(5)
+    # ── 1. LinkedIn jobs (Easy Apply + external via LinkedIn redirect) ─────────
+    if linkedin_jobs:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(
+                headless=args.headless,
+                args=['--disable-blink-features=AutomationControlled', '--disable-dev-shm-usage']
+            )
+            context = browser.new_context(
+                viewport={'width': 1920, 'height': 1080},
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+                           '(KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            page = context.new_page()
 
-        if not args.headless:
-            log.info("Browser open 10s for review...")
-            time.sleep(10)
-        browser.close()
+            if not applier.ensure_linkedin_session(context, page):
+                log.error("[ERROR] Could not establish LinkedIn session — skipping LinkedIn jobs")
+                for job in linkedin_jobs:
+                    record(job, False, "LinkedIn session failed")
+            else:
+                log.info("LinkedIn session active — processing LinkedIn jobs...")
+                for job in linkedin_jobs:
+                    ok, reason = apply_to_job_with_submit(
+                        applier, job, page,
+                        submit=args.submit,
+                        try_external=getattr(args, 'external', False),
+                    )
+                    record(job, ok, reason)
+                    time.sleep(5)
+
+            if not args.headless:
+                log.info("Browser open 10s for review...")
+                time.sleep(10)
+            browser.close()
+
+    # ── 2. External direct jobs (Computrabajo, Adzuna, OCC → ATS directo) ─────
+    if external_jobs:
+        log.info(f"\nProcessing {len(external_jobs)} external direct jobs "
+                 f"(Computrabajo / Adzuna / OCC)...")
+        for job in external_jobs:
+            ok, reason = apply_external_direct(
+                job, submit=args.submit, headless=args.headless
+            )
+            record(job, ok, reason)
+            time.sleep(3)
 
     # ── Summary ───────────────────────────────────────────────────────────────
     today = datetime.now().strftime('%d/%m/%Y %H:%M')

@@ -295,52 +295,64 @@ class LinkedInAutoApplyV3:
         print("[ERROR] Could not establish LinkedIn session")
         return False
     
-    def get_high_fit_jobs(self, min_score=7):
-        """Get jobs with FIT SCORE >= min_score, Status=New, and ONLY LinkedIn URLs."""
-        print(f"\n[SEARCH] Finding LinkedIn jobs with FIT >= {min_score} and Status=New...")
+    def get_high_fit_jobs(self, min_score=7,
+                          tabs=('linkedin', 'computrabajo', 'adzuna', 'occ')):
+        """Get jobs with FIT SCORE >= min_score and Status=New from all source tabs.
 
-        # FIX: jobs live in 'linkedin' tab, not 'registry'
-        all_jobs = self.sheet_manager.get_all_jobs(tab="linkedin")
-        high_fit = []
-        skipped_applied  = 0
-        skipped_status   = 0
-        skipped_external = 0
+        Each returned job carries '_source_tab' so the runner can route correctly:
+          - linkedin.com URL  → LinkedIn Easy Apply / external via LinkedIn redirect
+          - other URL         → ExternalApplier direct (Workable, Greenhouse, etc.)
+        """
+        print(f"\n[SEARCH] Finding jobs with FIT >= {min_score} and Status=New "
+              f"across tabs: {', '.join(tabs)}...")
 
-        for job in all_jobs:
+        high_fit        = []
+        skipped_applied = 0
+        skipped_status  = 0
+        by_tab: dict    = {}
+
+        for tab_key in tabs:
             try:
-                fit_score = int(job.get('FitScore', 0) or 0)
-                status    = job.get('Status', '').strip().lower()
-                apply_url = job.get('ApplyURL', '').strip()
+                tab_jobs = self.sheet_manager.get_all_jobs(tab=tab_key)
+                tab_count = 0
+                for job in tab_jobs:
+                    try:
+                        fit_score = int(job.get('FitScore', 0) or 0)
+                        status    = job.get('Status', '').strip().lower()
+                        apply_url = job.get('ApplyURL', '').strip()
 
-                # Skip terminal statuses (already processed)
-                if status in ('applied', 'rejected', 'interview', 'offer'):
-                    skipped_applied += 1
-                    continue
+                        # Skip terminal statuses
+                        if status in ('applied', 'rejected', 'interview', 'offer'):
+                            skipped_applied += 1
+                            continue
 
-                # Only act on explicit "new" (or blank — not yet reviewed)
-                if status not in ('new', ''):
-                    skipped_status += 1
-                    continue
+                        # Only "new" or blank (not manually reviewed/deferred)
+                        if status not in ('new', ''):
+                            skipped_status += 1
+                            continue
 
-                # FIT score + valid URL required
-                if fit_score >= min_score and apply_url:
-                    # Only LinkedIn Easy Apply jobs
-                    if 'linkedin.com/jobs' in apply_url:
-                        high_fit.append(job)
-                    else:
-                        skipped_external += 1
+                        if fit_score >= min_score and apply_url:
+                            job['_source_tab'] = tab_key
+                            high_fit.append(job)
+                            tab_count += 1
 
+                    except Exception as e:
+                        print(f"    [WARN] Skipping job ({tab_key}) parse error: {e}")
+                        continue
+
+                by_tab[tab_key] = tab_count
             except Exception as e:
-                print(f"    [WARN] Skipping job due to parse error: {e}")
-                continue
+                print(f"  [WARN] Could not read tab '{tab_key}': {e}")
 
-        print(f"[FOUND] {len(high_fit)} LinkedIn jobs ready for auto-apply")
+        total = len(high_fit)
+        print(f"[FOUND] {total} jobs ready for auto-apply:")
+        for tab_key, count in by_tab.items():
+            if count:
+                print(f"  • {tab_key}: {count}")
         if skipped_applied:
             print(f"[SKIP] {skipped_applied} already processed (Applied/Rejected/etc)")
         if skipped_status:
             print(f"[SKIP] {skipped_status} non-New status (manual review pending)")
-        if skipped_external:
-            print(f"[SKIP] {skipped_external} external jobs (not LinkedIn Easy Apply)")
         return high_fit
     
     def detect_field_type(self, input_element):
