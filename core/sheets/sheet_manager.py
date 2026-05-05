@@ -113,14 +113,37 @@ class SheetManager:
             return False
 
     def _get_headers(self, tab_name: str) -> List[str]:
-        """Obtiene los headers de una pestaña, usando cache para evitar HTTP 429."""
+        """Obtiene los headers de una pestaña, usando cache para evitar HTTP 429.
+        Devuelve [] si la pestaña no existe todavía (HTTP 400).
+        """
         if tab_name not in self._headers_cache:
-            result = self.service.spreadsheets().values().get(
-                spreadsheetId=self.spreadsheet_id,
-                range=f"{tab_name}!A1:Z1"
-            ).execute()
-            self._headers_cache[tab_name] = result.get('values', [[]])[0]
+            try:
+                result = self.service.spreadsheets().values().get(
+                    spreadsheetId=self.spreadsheet_id,
+                    range=f"{tab_name}!A1:Z1"
+                ).execute()
+                self._headers_cache[tab_name] = result.get('values', [[]])[0]
+            except Exception as e:
+                # HTTP 400 = tab doesn't exist yet — treat as empty
+                err_str = str(e)
+                if "400" in err_str or "Unable to parse range" in err_str:
+                    self._headers_cache[tab_name] = []
+                else:
+                    raise
         return self._headers_cache[tab_name]
+
+    def _create_tab(self, tab_name: str) -> None:
+        """Crea una nueva pestaña en el Spreadsheet si no existe."""
+        try:
+            self.service.spreadsheets().batchUpdate(
+                spreadsheetId=self.spreadsheet_id,
+                body={"requests": [{"addSheet": {"properties": {"title": tab_name}}}]},
+            ).execute()
+            print(f"  ✅ Tab '{tab_name}' creado en Google Sheets")
+        except Exception as e:
+            # Ignore "already exists" errors
+            if "already exists" not in str(e).lower():
+                raise
     
     def _get_credentials(self):
         """Obtiene credenciales OAuth de Google.
@@ -238,11 +261,14 @@ class SheetManager:
 
     def ensure_headers(self, tab: str, headers: List[str]) -> None:
         """Escribe los headers en la fila 1 si la pestaña está vacía.
+        Crea la pestaña automáticamente si no existe.
         Limpia el cache para que el siguiente _get_headers los tome.
         """
         tab_name = self.tabs.get(tab, tab)
         existing = self._get_headers(tab_name)
         if not existing:
+            # Create tab first if it doesn't exist yet
+            self._create_tab(tab_name)
             self.service.spreadsheets().values().update(
                 spreadsheetId=self.spreadsheet_id,
                 range=f"{tab_name}!A1",
