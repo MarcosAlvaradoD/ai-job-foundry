@@ -1,24 +1,20 @@
 #!/usr/bin/env python3
 """
-AI JOB FOUNDRY - OCC MUNDIAL MX SCRAPER (RSS + JSON-LD)
-=========================================================
-Scraper de OCC Mundial México.
-Strategy 1: RSS feed (público, sin browser, más estable)
-Strategy 2: HTTP + JSON-LD structured data fallback
+AI JOB FOUNDRY - OCC MUNDIAL MX SCRAPER (Playwright)
+=====================================================
+Scraper de OCC Mundial México usando Playwright.
+URL pattern: occ.com.mx/empleos/de-{slug}/en-todo-el-pais/
 
-OCC Mundial es el job board más grande de México con millones de vacantes.
+OCC bloquea HTTP simple (403) — requiere browser headless real.
+Strategy 1: JSON-LD structured data (<script type="application/ld+json">)
+Strategy 2: CSS card selectors (fallback)
+
 No requiere autenticación — búsqueda pública.
 """
-import sys, os, asyncio
-import urllib.request
-import urllib.parse
-import urllib.error
-import xml.etree.ElementTree as ET
-import json
-import re
-import time
+import sys, os, asyncio, json, re
 from pathlib import Path
 from datetime import datetime
+from playwright.async_api import async_playwright
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -34,54 +30,28 @@ OCC_HEADERS = [
     'SearchQuery', 'QuerySource', 'DateFound', 'Status', 'RemoteScope',
 ]
 
-_BASE_URL = "https://www.occ.com.mx"
+_BASE_URL  = "https://www.occ.com.mx"
+_LOG_DIR   = PROJECT_ROOT / "logs"
 
-_HTTP_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "es-MX,es;q=0.9,en;q=0.7",
-    "Accept-Encoding": "gzip, deflate, br",
-}
-
-_RSS_HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "application/rss+xml, application/xml, text/xml, */*",
-    "Accept-Language": "es-MX,es;q=0.9",
-}
+# CSS card selectors to try in priority order
+# TODO: confirm exact selectors from DevTools inspection
+_CARD_SELECTORS = [
+    '[class*="CardJob"]',
+    '[class*="card-job"]',
+    '[class*="JobCard"]',
+    'article[class*="job"]',
+    '[data-testid*="job"]',
+    '[class*="listado"] > div',
+    '.card',
+]
 
 
-def _http_get(url: str, headers: dict, retries: int = 3, backoff: float = 3.0) -> str | None:
-    """Fetch URL and return text, or None on persistent failure."""
-    req = urllib.request.Request(url, headers=headers)
-    last_exc = None
-    for attempt in range(1, retries + 1):
-        try:
-            with urllib.request.urlopen(req, timeout=20) as resp:
-                # Handle gzip transparently (urllib does this automatically)
-                raw = resp.read()
-                # Try utf-8 first, fall back to latin-1 (common in MX sites)
-                try:
-                    return raw.decode("utf-8", errors="replace")
-                except Exception:
-                    return raw.decode("latin-1", errors="replace")
-        except urllib.error.HTTPError as e:
-            if e.code in (403, 429, 503):
-                print(f"  {YELLOW}OCC HTTP {e.code} on attempt {attempt}/{retries}{END}")
-            last_exc = e
-        except Exception as exc:
-            last_exc = exc
-        if attempt < retries:
-            time.sleep(backoff)
-    print(f"  {RED}OCC fetch failed ({retries} attempts): {last_exc}{END}")
-    return None
+def _query_to_slug(query: str) -> str:
+    """Convert search query to OCC URL slug: 'Project Manager' → 'project-manager'"""
+    slug = query.lower().strip()
+    slug = re.sub(r'[^a-z0-9\s-]', '', slug)
+    slug = re.sub(r'\s+', '-', slug)
+    return slug
 
 
 def _detect_remote(text: str) -> str:
@@ -93,56 +63,13 @@ def _detect_remote(text: str) -> str:
     return "OnSite"
 
 
-def _extract_jsonld_jobs(html: str) -> list[dict]:
-    """Extract JobPosting objects from JSON-LD scripts embedded in HTML."""
-    jobs = []
-    pattern = re.compile(
-        r'<script[^>]+type=["\']application/ld\+json["\'][^>]*>(.*?)</script>',
-        re.DOTALL | re.IGNORECASE,
-    )
-    for m in pattern.finditer(html):
-        raw = m.group(1).strip()
-        try:
-            data = json.loads(raw)
-        except Exception:
-            continue
-        items = data if isinstance(data, list) else [data]
-        for item in items:
-            if item.get("@type") != "JobPosting":
-                continue
-            title   = item.get("title", "").strip()
-            company = ""
-            org = item.get("hiringOrganization", {})
-            if isinstance(org, dict):
-                company = org.get("name", "").strip()
-            location = ""
-            loc_obj = item.get("jobLocation", {})
-            if isinstance(loc_obj, dict):
-                addr = loc_obj.get("address", {})
-                if isinstance(addr, dict):
-                    location = (addr.get("addressLocality") or
-                                addr.get("addressRegion") or "México").strip()
-            apply_url = (item.get("url") or item.get("sameAs") or "").strip()
-            if not title:
-                continue
-            if not apply_url:
-                continue
-            jobs.append({
-                "title":     title,
-                "company":   company,
-                "location":  location or "México",
-                "apply_url": apply_url,
-                "remote":    _detect_remote(location + " " + title),
-            })
-    return jobs
-
-
 class OccScraper:
     def __init__(self, headless: bool = None):
-        # headless param kept for interface parity with other scrapers — not used (no browser)
-        self.headless = headless
+        if headless is None:
+            headless = os.environ.get("PLAYWRIGHT_HEADLESS", "false").lower() == "true"
+        self.headless      = headless
         self.jobs_found: list[dict] = []
-        self.dry_run = True
+        self.dry_run       = True
         self.sheet_manager = None
 
     async def run(self, dry_run: bool = True):
@@ -151,146 +78,201 @@ class OccScraper:
             self.sheet_manager = SheetManager()
 
         print(f"\n{CYAN}{'='*70}")
-        print(f"OCC MUNDIAL MX SCRAPER  (RSS + HTTP, no browser required)")
+        print(f"OCC MUNDIAL MX SCRAPER  (Playwright)")
         print(f"{'='*70}{END}")
         print(f"Mode: {YELLOW}{'DRY RUN' if dry_run else 'LIVE'}{END}\n")
 
-        for query, source in get_mexico_queries("en"):
-            self._search(query, source)
-            await asyncio.sleep(1.5)
+        async with async_playwright() as p:
+            browser = await p.firefox.launch(headless=self.headless)
+            context = await browser.new_context(
+                user_agent=(
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/124.0.0.0 Safari/537.36"
+                ),
+                viewport={"width": 1280, "height": 900},
+                locale="es-MX",
+            )
+            page = await context.new_page()
 
-        for query, source in get_latam_queries("en"):
-            self._search(query, source)
-            await asyncio.sleep(1.5)
-
-        self._print_summary()
-
-        if not dry_run and self.jobs_found:
-            self._save_to_sheets()
-
-    # ── Search: RSS first, JSON-LD fallback ───────────────────────────────────
-
-    def _search(self, query: str, query_source: str):
-        print(f"\n{CYAN}[OCC] Searching: {query}{END}")
-
-        # Strategy 1: RSS feed
-        count = self._search_rss(query, query_source)
-        if count > 0:
-            return
-
-        # Strategy 2: HTTP + JSON-LD
-        print(f"  {YELLOW}RSS yielded 0 — trying JSON-LD HTTP fallback{END}")
-        self._search_jsonld(query, query_source)
-
-    def _search_rss(self, query: str, query_source: str) -> int:
-        """
-        Fetch OCC RSS feed for query.
-        URL: https://www.occ.com.mx/empleos/rss/?q={query}
-        Returns number of jobs found (0 if feed empty or unavailable).
-        """
-        q_enc = urllib.parse.quote_plus(query)
-        url   = f"{_BASE_URL}/empleos/rss/?q={q_enc}"
-
-        text = _http_get(url, _RSS_HEADERS)
-        if not text:
-            return 0
-
-        # Detect HTML block page
-        stripped = text.lstrip()
-        if stripped.startswith("<!") or stripped[:5].lower().startswith("<html"):
-            print(f"  {YELLOW}RSS returned HTML — OCC may have blocked the request{END}")
-            return 0
-
-        try:
-            root = ET.fromstring(text)
-        except ET.ParseError as exc:
-            print(f"  {YELLOW}RSS parse error: {exc}{END}")
-            return 0
-
-        channel = root.find("channel")
-        if channel is None:
-            print(f"  {YELLOW}No <channel> in RSS response{END}")
-            return 0
-
-        items = channel.findall("item")
-        print(f"  RSS items: {len(items)}")
-
-        count = 0
-        for item in items[:20]:
             try:
-                title   = (item.findtext("title") or "").strip()
-                link    = (item.findtext("link")  or "").strip()
-                desc    = item.findtext("description") or ""
-                # OCC RSS: company is usually in <author> or <dc:creator>
-                company = ""
-                for tag in ("author", "{http://purl.org/dc/elements/1.1/}creator"):
-                    val = item.findtext(tag)
-                    if val:
-                        company = val.strip()
-                        break
-                location = "México"
-                # Try to extract location from description
-                for line in desc.replace("<br>", "\n").replace("<br/>", "\n").splitlines():
-                    l = line.strip().lower()
-                    if l.startswith("ubicación:") or l.startswith("location:"):
-                        location = line.split(":", 1)[1].strip() or "México"
-                        break
+                for query, source in get_mexico_queries("en"):
+                    await self._search(page, query, source)
+                    await asyncio.sleep(3)
 
-                if not title or not link:
+                for query, source in get_latam_queries("en"):
+                    await self._search(page, query, source)
+                    await asyncio.sleep(3)
+
+                self._print_summary()
+
+                if not dry_run and self.jobs_found:
+                    self._save_to_sheets()
+            finally:
+                await browser.close()
+
+    async def _load_page(self, page, url: str):
+        """Navigate and wait for content to settle."""
+        await page.goto(url, timeout=40000, wait_until="domcontentloaded")
+        try:
+            await page.wait_for_load_state("networkidle", timeout=15000)
+        except Exception:
+            pass
+        await asyncio.sleep(4)
+        await page.evaluate("window.scrollTo(0, document.body.scrollHeight)")
+        await asyncio.sleep(2)
+
+    async def _extract_jsonld(self, page) -> list[dict]:
+        """Extract JobPosting objects from JSON-LD scripts in the page."""
+        jobs = []
+        try:
+            scripts = await page.query_selector_all('script[type="application/ld+json"]')
+            for script in scripts:
+                raw = await script.inner_text()
+                try:
+                    data = json.loads(raw)
+                except Exception:
                     continue
+                items = data if isinstance(data, list) else [data]
+                for item in items:
+                    if item.get("@type") != "JobPosting":
+                        continue
+                    title   = item.get("title", "").strip()
+                    company = ""
+                    org = item.get("hiringOrganization", {})
+                    if isinstance(org, dict):
+                        company = org.get("name", "").strip()
+                    location = ""
+                    loc_obj = item.get("jobLocation", {})
+                    if isinstance(loc_obj, dict):
+                        addr = loc_obj.get("address", {})
+                        if isinstance(addr, dict):
+                            location = (addr.get("addressLocality") or
+                                        addr.get("addressRegion") or "México").strip()
+                    apply_url = (item.get("url") or item.get("sameAs") or "").strip()
+                    if not title or not apply_url:
+                        continue
+                    jobs.append({
+                        "title": title, "company": company,
+                        "location": location or "México",
+                        "apply_url": apply_url,
+                        "remote": _detect_remote(location + " " + title),
+                    })
+        except Exception as exc:
+            print(f"  {YELLOW}JSON-LD error: {exc}{END}")
+        return jobs
 
-                self.jobs_found.append({
-                    'Role':        title[:100],
-                    'Company':     company[:100],
-                    'Location':    location[:100],
-                    'ApplyURL':    link,
-                    'Source':      'OCC Mundial MX',
-                    'SearchQuery': query,
-                    'QuerySource': query_source,
-                    'DateFound':   datetime.now().strftime('%Y-%m-%d'),
-                    'Status':      'New',
-                    'RemoteScope': _detect_remote(title + " " + location + " " + desc),
-                })
-                count += 1
+    async def _find_cards(self, page):
+        """Try CSS selectors and return first non-empty match."""
+        for sel in _CARD_SELECTORS:
+            try:
+                cards = await page.query_selector_all(sel)
+                if cards:
+                    print(f"  Selector matched '{sel}': {len(cards)} cards")
+                    return cards
             except Exception:
                 continue
+        return []
 
-        print(f"  {GREEN}Parsed {count} jobs (RSS){END}")
-        return count
+    async def _search(self, page, query: str, query_source: str):
+        slug = _query_to_slug(query)
+        url  = f"{_BASE_URL}/empleos/de-{slug}/en-todo-el-pais/"
+        print(f"\n{CYAN}[OCC] Searching: {query} → {url}{END}")
 
-    def _search_jsonld(self, query: str, query_source: str):
-        """
-        HTTP GET the OCC search results page and extract JobPosting JSON-LD.
-        URL: https://www.occ.com.mx/empleos/?busqueda={query}&estado=Todo%20el%20pa%C3%ADs
-        """
-        q_enc = urllib.parse.quote_plus(query)
-        url   = f"{_BASE_URL}/empleos/?busqueda={q_enc}&estado=Todo%20el%20pa%C3%ADs"
+        try:
+            await self._load_page(page, url)
 
-        html = _http_get(url, _HTTP_HEADERS)
-        if not html:
-            return
+            # ── Strategy 1: JSON-LD ──────────────────────────────────────────
+            jsonld_jobs = await self._extract_jsonld(page)
+            if jsonld_jobs:
+                print(f"  JSON-LD: {len(jsonld_jobs)} jobs")
+                count = 0
+                for jl in jsonld_jobs[:20]:
+                    self.jobs_found.append({
+                        'Role':        jl["title"][:100],
+                        'Company':     jl["company"][:100],
+                        'Location':    jl["location"][:100],
+                        'ApplyURL':    jl["apply_url"],
+                        'Source':      'OCC Mundial MX',
+                        'SearchQuery': query,
+                        'QuerySource': query_source,
+                        'DateFound':   datetime.now().strftime('%Y-%m-%d'),
+                        'Status':      'New',
+                        'RemoteScope': jl["remote"],
+                    })
+                    count += 1
+                print(f"  {GREEN}Found {count} jobs (JSON-LD){END}")
+                return
 
-        jobs = _extract_jsonld_jobs(html)
-        print(f"  JSON-LD jobs: {len(jobs)}")
+            # ── Strategy 2: CSS card selectors ───────────────────────────────
+            cards = await self._find_cards(page)
 
-        count = 0
-        for jl in jobs[:20]:
-            self.jobs_found.append({
-                'Role':        jl["title"][:100],
-                'Company':     jl["company"][:100],
-                'Location':    jl["location"][:100],
-                'ApplyURL':    jl["apply_url"],
-                'Source':      'OCC Mundial MX',
-                'SearchQuery': query,
-                'QuerySource': query_source,
-                'DateFound':   datetime.now().strftime('%Y-%m-%d'),
-                'Status':      'New',
-                'RemoteScope': jl["remote"],
-            })
-            count += 1
-        print(f"  {GREEN}Parsed {count} jobs (JSON-LD){END}")
+            if not cards:
+                _LOG_DIR.mkdir(exist_ok=True)
+                debug_path = _LOG_DIR / f"debug_occ_{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
+                try:
+                    await page.screenshot(path=str(debug_path), full_page=True)
+                    print(f"  {YELLOW}0 cards — screenshot: {debug_path.name}{END}")
+                except Exception:
+                    pass
+                print(f"  {YELLOW}No cards found for: {query}{END}")
+                return
 
-    # ── Summary & Sheet save ──────────────────────────────────────────────────
+            count = 0
+            for card in cards[:20]:
+                try:
+                    # Title — try multiple selector patterns
+                    title_el = await card.query_selector(
+                        'h2 a, h3 a, [class*="title"] a, [class*="Title"] a, '
+                        '[class*="name"] a, [class*="Name"] a, a[class*="job"]'
+                    )
+                    title = (await title_el.inner_text()).strip() if title_el else ""
+
+                    # Company
+                    company_el = await card.query_selector(
+                        '[class*="company"], [class*="Company"], '
+                        '[class*="empresa"], [class*="Empresa"]'
+                    )
+                    company = (await company_el.inner_text()).strip() if company_el else ""
+
+                    # Location
+                    loc_el = await card.query_selector(
+                        '[class*="location"], [class*="Location"], '
+                        '[class*="lugar"], [class*="ciudad"], [class*="Ciudad"]'
+                    )
+                    location = (await loc_el.inner_text()).strip() if loc_el else "México"
+
+                    # URL
+                    apply_url = ""
+                    if title_el:
+                        href = await title_el.get_attribute("href")
+                        if href:
+                            apply_url = (href if href.startswith("http")
+                                         else f"{_BASE_URL}{href}")
+
+                    if not title or not apply_url:
+                        continue
+
+                    self.jobs_found.append({
+                        'Role':        title[:100],
+                        'Company':     company[:100],
+                        'Location':    location[:100],
+                        'ApplyURL':    apply_url,
+                        'Source':      'OCC Mundial MX',
+                        'SearchQuery': query,
+                        'QuerySource': query_source,
+                        'DateFound':   datetime.now().strftime('%Y-%m-%d'),
+                        'Status':      'New',
+                        'RemoteScope': _detect_remote(location + " " + title),
+                    })
+                    count += 1
+                except Exception:
+                    continue
+
+            print(f"  {GREEN}Found {count} jobs (CSS){END}")
+
+        except Exception as e:
+            print(f"  {RED}Error searching '{query}': {e}{END}")
 
     def _print_summary(self):
         print(f"\n{CYAN}{'='*70}")
