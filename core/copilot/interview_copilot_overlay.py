@@ -157,6 +157,11 @@ class InterviewCopilotOverlay:
         self._listen_thread = None
         self._audio_frames  = []
 
+        # MD session log (en tiempo real)
+        self._session_start = datetime.now()
+        self._md_path       = None
+        self._q_counter     = 0
+
         # Speech recognition
         self.recognizer  = sr.Recognizer() if HAS_SR else None
         self.microphone  = None   # Inicializar lazy para no bloquear el arranque
@@ -164,6 +169,7 @@ class InterviewCopilotOverlay:
         self._build_ui()
         self._apply_capture_exclusion()
         self._detect_lm_studio()
+        self._init_md_log()
 
     # ─── CV ──────────────────────────────────────────────────────────────────
     def _load_cv(self) -> str:
@@ -770,6 +776,7 @@ class InterviewCopilotOverlay:
             self.input_entry.config(fg=FG_MUTED)
 
     def _quit(self):
+        self._finalize_md_log()
         self._save_session_log()
         self.root.destroy()
 
@@ -854,6 +861,10 @@ INSTRUCCIONES:
 
             if self.session_log:
                 self.session_log[-1]["response"] = full
+            # Guardar Q&A en MD en tiempo real (non-blocking)
+            threading.Thread(
+                target=self._append_md_entry, args=(question, full), daemon=True
+            ).start()
             self.root.after(0, lambda: self._status("Listo — Enter o Ctrl+L para siguiente", ACCENT_GRN))
 
         except urllib.error.URLError as e:
@@ -867,7 +878,69 @@ INSTRUCCIONES:
         finally:
             self.is_thinking = False
 
-    # ─── Session log ─────────────────────────────────────────────────────────
+    # ─── MD session log (en tiempo real) ─────────────────────────────────────
+    def _init_md_log(self):
+        """Crea el archivo MD al inicio de la sesión."""
+        try:
+            LOG_PATH.mkdir(parents=True, exist_ok=True)
+            ts = self._session_start.strftime("%Y%m%d_%H%M%S")
+            self._md_path = LOG_PATH / f"session_{ts}.md"
+            header = (
+                f"# Interview Session — {self._session_start.strftime('%Y-%m-%d %H:%M')}\n\n"
+                f"**Modelo AI:** {LM_STUDIO_MODEL}  \n"
+                f"**CV:** {CV_PATH.name if CV_PATH.exists() else 'No encontrado'}  \n"
+                f"**Job:** _(sin contexto — carga uno con el botón Sheets)_\n\n"
+                f"---\n\n"
+            )
+            self._md_path.write_text(header, encoding="utf-8")
+            print(f"[Copilot] MD iniciado: {self._md_path.name}")
+        except Exception as e:
+            print(f"[Copilot] No se pudo crear MD: {e}")
+
+    def _append_md_entry(self, question: str, response: str):
+        """Appendea cada Q&A al MD en tiempo real (se llama desde thread de AI)."""
+        if not self._md_path:
+            return
+        try:
+            self._q_counter += 1
+            ts  = datetime.now().strftime("%H:%M")
+            job = f" · *{self.job_context}*" if self.job_context else ""
+            entry = (
+                f"## Q{self._q_counter} — {ts}{job}\n\n"
+                f"**Pregunta:** {question}\n\n"
+                f"**Sugerencia AI:**\n\n{response}\n\n"
+                f"---\n\n"
+            )
+            with open(self._md_path, "a", encoding="utf-8") as f:
+                f.write(entry)
+        except Exception:
+            pass
+
+    def _finalize_md_log(self):
+        """Cierra el MD con duración y resumen al terminar la sesión."""
+        if not self._md_path or not self._md_path.exists():
+            return
+        try:
+            duration = datetime.now() - self._session_start
+            mins = int(duration.total_seconds() // 60)
+            footer = (
+                f"---\n\n"
+                f"## Resumen de sesión\n\n"
+                f"| | |\n|---|---|\n"
+                f"| **Fin** | {datetime.now().strftime('%H:%M')} |\n"
+                f"| **Duración** | {mins} min |\n"
+                f"| **Preguntas** | {self._q_counter} |\n"
+                f"| **Job** | {self.job_context or 'No configurado'} |\n"
+                f"| **Modelo** | {LM_STUDIO_MODEL} |\n\n"
+                f"> _Generado por AI Interview Copilot — pásalo a ENERD para análisis post-entrevista_\n"
+            )
+            with open(self._md_path, "a", encoding="utf-8") as f:
+                f.write(footer)
+            print(f"[Copilot] MD guardado: {self._md_path}")
+        except Exception:
+            pass
+
+    # ─── Session log JSON (se mantiene igual) ────────────────────────────────
     def _save_session_log(self):
         if not self.session_log:
             return
