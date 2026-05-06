@@ -532,14 +532,21 @@ class LinkedInAutoApplyV3:
             # Wait for page load
             time.sleep(3)
             
-            # Check if Easy Apply button exists
-            easy_apply_button = page.query_selector('button:has-text("Easy Apply")')
-            
+            # Check if Easy Apply / LinkedIn Apply button exists
+            # LinkedIn renombró "Easy Apply" → "LinkedIn Apply" con clase jobs-apply-button
+            easy_apply_button = page.query_selector(
+                'button:has-text("Easy Apply"), '
+                'button[aria-label*="Easy Apply"], '
+                'button[aria-label*="easy apply"], '
+                'button.jobs-apply-button, '
+                '.jobs-apply-button--top-card'
+            )
+
             if not easy_apply_button:
-                print("[SKIP] Not an Easy Apply job")
+                print("[SKIP] Not an Easy Apply / LinkedIn Apply job")
                 return False, "Not Easy Apply"
-            
-            print("[FOUND] Easy Apply button!")
+
+            print("[FOUND] Easy Apply / LinkedIn Apply button!")
             
             if dry_run:
                 print("[DRY-RUN] Would click Easy Apply and fill form")

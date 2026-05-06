@@ -244,10 +244,15 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
             page.goto(url, timeout=30000)
             time.sleep(3)
 
-        # Check for Easy Apply button
-        easy_apply = page.query_selector('button:has-text("Easy Apply")')
-        if not easy_apply:
-            easy_apply = page.query_selector('[aria-label*="Easy Apply"]')
+        # Check for Easy Apply / LinkedIn Apply button
+        # LinkedIn renamed "Easy Apply" → "LinkedIn Apply" (botón con clase jobs-apply-button)
+        easy_apply = page.query_selector(
+            'button:has-text("Easy Apply"), '
+            'button[aria-label*="Easy Apply"], '
+            'button[aria-label*="easy apply"], '
+            'button.jobs-apply-button, '
+            '.jobs-apply-button--top-card'
+        )
 
         if not easy_apply:
             if try_external:
@@ -276,8 +281,13 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
                         pass
 
                 # Second try: click Apply and capture the popup/new-tab URL
+                # LI-03: el botón "Apply" en LinkedIn puede ser <a> no <button>
                 if not ext_url:
-                    apply_btn = page.query_selector('button:has-text("Apply"):not(:has-text("Easy"))')
+                    apply_btn = page.query_selector(
+                        'button:has-text("Apply"):not(:has-text("Easy")), '
+                        'a.jobs-apply-button:not([aria-label*="Easy"]), '
+                        'a[data-tracking-control-name*="apply"]:not([aria-label*="Easy"])'
+                    )
                     if apply_btn:
                         try:
                             with page.expect_popup(timeout=8000) as popup_info:

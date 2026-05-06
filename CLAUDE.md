@@ -1,305 +1,136 @@
-﻿# 🚀 AI JOB FOUNDRY - CLAUDE CODE INSTRUCTIONS
-
-**Versión:** 2.0  
-**Fecha:** 2026-03-07  
-**Usuario:** Marcos Alberto Alvarado De La Torre  
-**Ubicación:** C:\Users\MSI\Desktop\ai-job-foundry
-
----
-
-## 🎯 PROYECTO OVERVIEW
-
-Sistema automatizado de búsqueda de empleo que:
-1. Scrapea LinkedIn/Indeed/Glassdoor
-2. Procesa emails de reclutadores
-3. Analiza match con IA local (LM Studio + Qwen 2.5 14B)
-4. Calcula FIT SCORES (0-10)
-5. Guarda en Google Sheets
-6. Auto-aplica a ofertas (en desarrollo)
-
----
-
-## 📊 ESTADO ACTUAL (2026-03-07)
-
-### ✅ COMPLETADO:
-- **TAREA 1:** LM Studio IP actualizada → http://172.17.32.1:11434
-- **TAREA 2:** 52/69 FIT scores calculados (75%)
-- OAuth funcionando con auto-refresh
-- LinkedIn scraper operativo
-- Gmail API procesando emails
-- Google Sheets integrado
-
-### ⏳ PENDIENTE:
-- **17 FIT scores** restantes (rate limit issue)
-- Auto-Apply con IA Local (TAREA 3)
-- Interview Copilot
-
----
-
-## 🗂️ ESTRUCTURA DEL PROYECTO
-
-\\\
-ai-job-foundry/
-├── core/
-│   ├── automation/
-│   │   ├── gmail_jobs_monitor.py
-│   │   ├── auto_apply_linkedin.py
-│   │   └── job_bulletin_processor.py
-│   ├── enrichment/
-│   │   └── ai_analyzer.py
-│   ├── ingestion/
-│   │   ├── linkedin_scraper_V2.py
-│   │   └── indeed_scraper.py
-│   ├── sheets/
-│   │   └── sheet_manager.py
-│   └── utils/
-│       └── llm_client.py
-├── scripts/
-│   ├── maintenance/
-│   │   ├── calculate_linkedin_fit_scores.py
-│   │   └── calculate_linkedin_fit_scores_v2.py
-│   └── tests/
-├── data/
-│   ├── credentials/
-│   │   ├── token.json
-│   │   ├── credentials.json
-│   │   └── linkedin_session.json
-│   └── cv/
-│       └── CV_Marcos_Alvarado.pdf
-├── .env
-└── control_center.py
-\\\
-
----
-
-## 🔧 CONFIGURACIÓN CRÍTICA
-
-### Variables de Entorno (.env):
-\\\env
-LLM_URL=http://172.17.32.1:11434/v1/chat/completions
-LLM_MODEL=qwen2.5-14b-instruct
-GOOGLE_SHEETS_ID=1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEetTsCIBxdg
-GMAIL_ADDRESS=markalvati@gmail.com
-LINKEDIN_EMAIL=markalvati@gmail.com
-LINKEDIN_PASSWORD=4&nxXdJbaL["Rax*C!8e"4P5
-\\\
-
-### LM Studio:
-- URL: http://172.17.32.1:11434
-- Modelo: Qwen/Qwen2.5-14B-Instruct-GGUF
-- Auth: DESACTIVADA
-- Status: ✅ Running
-
-### Google Sheets:
-- ID: 1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEetTsCIBxdg
-- URL: https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEetTsCIBxdg
-- Tabs: Registry, LinkedIn (252 jobs), Indeed, Glassdoor
-
----
-
-## 🎯 TAREAS INMEDIATAS
-
-### TAREA 2 (URGENTE): Completar 17 FIT Scores restantes
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-**Problema:** Rate limit de Google Sheets (60 escrituras/minuto)
+## Project Overview
 
-**Solución:** Usar script V2 con protección de rate limit
+**AI Job Foundry** — automated job scraping + FIT scoring + auto-apply pipeline for Marcos Alvarado (PM Senior, Guadalajara MX).
 
-\\\powershell
-cd C:\Users\MSI\Desktop\ai-job-foundry
-py scripts\maintenance\calculate_linkedin_fit_scores_v2.py
-\\\
+Pipeline flow:
+1. **GHA scraper** (daily 10am MX / 16:00 UTC, Mon-Fri) → LinkedIn + Computrabajo + Adzuna + OCC
+2. **FIT scores** (Gemini Flash → NVIDIA NIM → Ollama fallback) → 0-10 score vs Marcos's profile
+3. **Auto-apply** (local PC only, never in GHA) → applies to jobs with FIT ≥ 7
 
-**Resultado esperado:**
-- Procesará 17 jobs pendientes
-- Pausará automáticamente al acercarse a rate limit
-- Guardará todos los FIT scores en Google Sheets
+Google Sheet: `https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEtTsCIBxdg`  
+Tabs: LinkedIn | Computrabajo | Adzuna | OCC | Registry
 
-### TAREA 3: Auto-Apply AI Local (100% gratis)
+## Commands
 
-**Stack tecnológico:**
-1. EasyOCR - Extrae texto + coordenadas de screenshots
-2. LM Studio (Qwen 2.5 14B) - Analiza y decide acciones
-3. Playwright - Ejecuta navegación
+All commands from `C:\dev\ai-job-foundry`. Use `py` (not `python`). Prefix with `$env:PYTHONUTF8="1"` for scripts that use emojis.
 
-**Instalación:**
-\\\powershell
-pip install easyocr pillow
-\\\
-
-**Archivos a crear:**
-1. \core/automation/linkedin_ocr_helper.py\
-2. \core/automation/auto_apply_linkedin_ai_local.py\
-
-**Flujo:**
-1. Screenshot de página → EasyOCR extrae texto
-2. LM Studio analiza: "¿Dónde está el botón 'Easy Apply'?"
-3. Playwright hace click en coordenadas
-4. Repite hasta completar aplicación
-5. Actualiza Google Sheets: Status="Applied"
-
----
-
-## 📝 COMANDOS ÚTILES
-
-### Control Center:
-\\\powershell
-py control_center.py
-\\\
-
-### Calcular FIT Scores:
-\\\powershell
-py scripts\maintenance\calculate_linkedin_fit_scores_v2.py
-\\\
-
-### Ver Google Sheets:
-\\\powershell
-start https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEetTsCIBxdg
-\\\
-
-### Verificar LM Studio:
-\\\powershell
-curl http://172.17.32.1:11434/v1/models
-\\\
-
-### Test Email Processing:
-\\\powershell
-py scripts\tests\test_email_processing.py
-\\\
-
-### LinkedIn Scraper:
-\\\powershell
-py scripts\visual_test.py
-\\\
-
----
-
-## 🚨 PROBLEMAS CONOCIDOS
-
-### 1. Google Sheets Rate Limit (429)
-**Síntoma:** Error al guardar FIT scores  
-**Causa:** >60 escrituras/minuto  
-**Solución:** Script V2 con delays automáticos
-
-### 2. LinkedIn Auto-Apply Timeout
-**Síntoma:** Abre páginas pero no aplica  
-**Causa:** Selectores CSS no encuentran botones  
-**Solución:** Implementar Auto-Apply AI Local (TAREA 3)
-
-### 3. Claude Code API Error
-**Síntoma:** "request.thinking.type: Invalid discriminator value"  
-**Causa:** Bug de API de Anthropic  
-**Solución:** Usar Claude Code standalone (funcionando) o Chat Web
-
----
-
-## 🎓 PERFIL PROFESIONAL DEL USUARIO
-
-**Roles objetivo:**
-- Project Manager
-- Product Owner
-- Senior Business Analyst
-- IT Manager
-- ETL Consultant
-
-**NO busca:** Software Developer positions
-
-**Experiencia:**
-- ERP migrations (Intelisis → Dynamics AX LATAM)
-- ETL masivo (800+ TB Toyota Finance)
-- IT Infrastructure (Ubiquiti → Meraki)
-- BI/Power BI
-- Proyectos multinacionales
-
-**Ubicación:** Guadalajara, México (CST, GMT-6)  
-**Preferencia:** Remote work (familia con bebé)
-
----
-
-## 📊 MÉTRICAS ACTUALES
-
-| Métrica | Valor |
-|---------|-------|
-| LinkedIn Jobs | 252 |
-| Con FIT Score | 235 (93%) |
-| Sin FIT Score | 17 (7%) |
-| FIT 7+ | ~235 |
-| Glassdoor Jobs | 452 |
-| Indeed Jobs | 5 |
-| Aplicados | 0 |
-
----
-
-## 🔐 ARCHIVOS SENSIBLES (NO MODIFICAR)
-
-- \data/credentials/token.json\ - OAuth Google
-- \data/credentials/credentials.json\ - Google API
-- \data/credentials/linkedin_session.json\ - LinkedIn session
-- \.env\ - Variables de entorno
-
----
-
-## ✅ PRINCIPIOS DE DESARROLLO
-
-1. **NO romper código que funciona**
-2. **Crear archivos NUEVOS**, no modificar viejos
-3. **DRY RUN primero**, LIVE después
-4. **Un cambio a la vez**
-5. **Logging comprehensivo** en logs/powershell/
-6. **Windows-optimized:** PowerShell, paths absolutos
-
----
-
-## 🚀 WORKFLOW RECOMENDADO
-
-1. **Verificar estado:**
-   \\\powershell
-   py check_linkedin_status.py
-   \\\
-
-2. **Completar FIT scores:**
-   \\\powershell
-   py scripts\maintenance\calculate_linkedin_fit_scores_v2.py
-   \\\
-
-3. **Verificar en Sheets:**
-   https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEetTsCIBxdg
-
-4. **Implementar Auto-Apply AI:**
-   - Instalar: \pip install easyocr pillow\
-   - Crear: \core/automation/auto_apply_linkedin_ai_local.py\
-   - Test en DRY RUN
-   - Ejecutar LIVE
-
----
-
-## 📞 CONTACTO Y RECURSOS
-
-**Google Sheets Dashboard:**  
-https://docs.google.com/spreadsheets/d/1EqWPiHdcYyMr5trEuiT_-lzPVEr0owOoDEetTsCIBxdg
-
-**LM Studio Interface:**  
-http://172.17.32.1:11434
-
-**Documentación de referencia:**
-- PROJECT_STATUS.md - Estado detallado
-- ESTADO_FINAL_2026-03-07.md - Resumen de sesión
-- PROMPT_MIGRACION_AUTOAPPLY_AI.md - Detalles Auto-Apply
-
----
-
-## 🎯 META DICIEMBRE 2026
-
-- ✅ Gmail processing (100%)
-- ✅ AI Analysis (100%)
-- ✅ Google Sheets (100%)
-- ⏳ FIT Scores (93% - completar 100%)
-- ⏳ Auto-Apply (0% - implementar)
-- ❌ Interview Copilot (0%)
-
-**Progreso total:** 85%  
-**Meta:** 95% by end of December
-
----
-
-**IMPORTANTE:** Este archivo contiene TODA la información necesaria para trabajar con el proyecto. Lee completamente antes de ejecutar comandos.
+```powershell
+# Auto-apply (LOCAL ONLY — never runs in GHA)
+$env:PYTHONUTF8="1"; py scripts/apply/run_autoapply.py --dry-run --max 5
+$env:PYTHONUTF8="1"; py scripts/apply/run_autoapply.py --dry-run --job-id <JOB_ID>
+$env:PYTHONUTF8="1"; py scripts/apply/run_autoapply.py --submit --max 3   # real submission
+
+# FIT scores for all tabs (~45-60 min, uses Gemini/NVIDIA/Ollama)
+$env:PYTHONUTF8="1"; py scripts/maintenance/calculate_linkedin_fit_scores.py
+
+# Check sheet coverage (FIT scores, tab counts)
+$env:PYTHONUTF8="1"; py check_jobs.py
+
+# Trigger GHA scraper manually
+gh workflow run daily_scraper.yml --field mode=live
+gh run list --limit 5
+```
+
+## Architecture
+
+### Canonical Entry Points
+
+| Module | Path | Role |
+|--------|------|------|
+| `SheetManager` | `core/sheets/sheet_manager.py` | All Google Sheets I/O. Tab auto-creation, header caching, 400-error handling. Single source of truth. |
+| `LinkedInAutoApplyV3` | `core/automation/linkedin_auto_apply.py` | LinkedIn Easy Apply via Playwright. Cookies from `data/linkedin_cookies.json`, auto-login from `.env`. |
+| `ExternalApplier` | `core/automation/auto_apply_external.py` | Non-LinkedIn ATS (Workable, Greenhouse, Lever, SmartRecruiters, Workday, Generic). AI form-fill. |
+| `CVCustomizer` | `core/automation/cv_customizer.py` | Generates job-specific PDFs for FIT ≥ 8. Base CV used for FIT 7. |
+| Scrapers | `core/ingestion/` | `linkedin_search_scraper_v3.py`, `computrabajo_scraper.py`, `adzuna_scraper.py`, `occ_scraper.py` |
+| Search queries | `core/ingestion/queries.py` | Central list of all scraper queries (EN + ES). Edit here to change what gets scraped. |
+| FIT scorer | `scripts/maintenance/calculate_linkedin_fit_scores.py` | Multi-tab, multi-backend AI with automatic 429 fallback. |
+| CI orchestrator | `scripts/ci/run_scraper_ci.py` | GHA entry point — runs all scrapers sequentially with `headless=True`. |
+
+### Auto-Apply Flow (`scripts/apply/run_autoapply.py`)
+
+1. Calls `get_high_fit_jobs()` from `linkedin_auto_apply.py` — reads all 4 source tabs, returns FIT ≥ 7 & Status != Applied
+2. Routes by job URL:
+   - `linkedin.com` URL → `LinkedInAutoApplyV3` (Easy Apply modal)
+   - Any other URL → `ExternalApplier` directly (navigate to ATS)
+3. After apply, calls `update_sheet_status(job, status)` — uses `job['_source_tab']` to write to the correct tab
+
+### AI Backend Priority
+
+Both `auto_apply_external.py` and `calculate_linkedin_fit_scores.py` use the same fallback chain:
+1. LM Studio / Ollama (`LLM_URL` in `.env`, default `http://127.0.0.1:4000`) — always tried first for local runs
+2. Gemini Flash (`GEMINI_API_KEY`) — ~15 rpm free tier
+3. NVIDIA NIM (`NVIDIA_API_KEY`) — ~5 rpm free tier
+4. Hardcoded generic fallback string
+
+### GHA vs Local split
+
+| Component | GHA (Ubuntu) | Local PC |
+|-----------|-------------|----------|
+| Scrapers | ✅ Daily cron | Can run manually |
+| FIT scores | ✅ After each scrape | Can run manually |
+| Auto-apply | ❌ Never | ✅ Only here |
+| LinkedIn session | `LINKEDIN_AUTH_JSON` secret | `data/linkedin_cookies.json` |
+| Google credentials | `GOOGLE_CREDENTIALS_JSON` + `GOOGLE_TOKEN_JSON` secrets | `data/credentials/` |
+
+GHA uses `requirements_ci.txt` (minimal). Local has full `requirements.txt`.
+
+## Active Bug (2026-05-05)
+
+LinkedIn renamed "Easy Apply" → "LinkedIn Apply". The button selector in `scripts/apply/run_autoapply.py` ~line 248 no longer matches.
+
+```python
+# Replace broken selector with:
+easy_apply = page.query_selector(
+    'button:has-text("Easy Apply"), '
+    'button[aria-label*="Easy Apply"], '
+    'button[aria-label*="easy apply"], '
+    'button.jobs-apply-button, '
+    '.jobs-apply-button--top-card'
+)
+
+# Also: external "Apply" button is <a> not <button> (~line 280):
+apply_btn = page.query_selector(
+    'button:has-text("Apply"):not(:has-text("Easy")), '
+    'a.jobs-apply-button:not([aria-label*="Easy"]), '
+    'a[data-tracking-control-name*="apply"]:not([aria-label*="Easy"])'
+)
+```
+
+Evidence: `logs/debug_apply.png` — `[FOUND] 'Apply': 0 buttons, 10 links`
+
+## Key Constraints
+
+- `data/credentials/`, `data/linkedin_cookies.json`, `.env` — gitignored, local-only. Never read, modify, or commit these.
+- Apply filters: skip if visible salary < 65k MXN / $40k USD; skip pure developer roles; skip video-required forms.
+- Max 15 LinkedIn applies/day to avoid account flags.
+- `SheetManager.get_all_jobs()` and `_get_headers()` return `[]` safely if a tab doesn't exist yet (OCC tab is auto-created on first GHA run).
+
+## Directory Map
+
+```
+core/
+  automation/     — apply logic (linkedin_auto_apply.py is canonical V3; older files are legacy)
+  ingestion/      — scrapers + queries.py
+  sheets/         — SheetManager (single Sheets abstraction)
+  enrichment/     — FIT score analysis helpers
+  utils/          — oauth_validator.py, linkedin_credentials.py
+scripts/
+  apply/          — run_autoapply.py (production auto-apply runner)
+  ci/             — run_scraper_ci.py (GHA entry point)
+  maintenance/    — calculate_linkedin_fit_scores.py, cleanup/dedup tools
+  oauth/          — token refresh utilities
+.github/workflows/
+  daily_scraper.yml — cron Mon-Fri 10am MX (16:00 UTC), timeout 65 min
+data/
+  cv/             — CV_Marcos_Alvarado_2026.pdf (base) + generated/ (custom PDFs per job)
+  credentials/    — GITIGNORED
+logs/
+  autoapply_YYYYMMDD.log
+  scraper_YYYYMMDD_HHMMSS.log
+```
+
+Many UPPERCASE `.py` files at root level and in `scripts/tests/` are one-off debug scripts from past sessions — not part of the production pipeline.
