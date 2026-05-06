@@ -390,13 +390,23 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
                 submit_btn.click()
                 time.sleep(3)
 
-                # Verify success
-                success_indicators = [
-                    page.query_selector('[data-test-modal="post-apply-modal"]'),
-                    page.query_selector(':has-text("Application submitted")'),
-                    page.query_selector(':has-text("Your application was sent")'),
+                # Verify success (EN + ES LinkedIn MX)
+                success_selectors = [
+                    '[data-test-modal="post-apply-modal"]',
+                    'h2:has-text("Application submitted")',
+                    'h2:has-text("Your application was sent")',
+                    # LinkedIn MX Spanish
+                    'h2:has-text("Solicitud enviada")',
+                    'h2:has-text("Tu solicitud fue enviada")',
+                    '[aria-label*="Application submitted"]',
+                    '[aria-label*="Solicitud enviada"]',
+                    # Generic post-apply modal
+                    '.post-apply-timeline',
+                    '[data-test-id="post-apply-modal"]',
                 ]
-                submitted = any(el is not None for el in success_indicators)
+                submitted = any(
+                    page.query_selector(s) is not None for s in success_selectors
+                )
 
                 if submitted:
                     print("  [SUCCESS] Application submitted!")

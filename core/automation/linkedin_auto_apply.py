@@ -375,28 +375,34 @@ class LinkedInAutoApplyV3:
             # Combine all text for matching
             combined = f"{label_text} {placeholder} {name} {id_attr} {aria_label}".lower()
             
-            # Field type detection
-            if any(x in combined for x in ['first name', 'firstname', 'fname']):
+            # Field type detection (EN + ES LinkedIn MX)
+            if any(x in combined for x in ['first name', 'firstname', 'fname',
+                                            'nombre', 'primer nombre']):
                 return 'first_name'
-            elif any(x in combined for x in ['last name', 'lastname', 'lname']):
+            elif any(x in combined for x in ['last name', 'lastname', 'lname',
+                                              'apellido', 'segundo nombre']):
                 return 'last_name'
-            elif any(x in combined for x in ['full name', 'name', 'your name']):
+            elif any(x in combined for x in ['full name', 'your name',
+                                              'nombre completo']):
                 return 'full_name'
-            elif 'email' in combined or 'e-mail' in combined:
+            elif 'email' in combined or 'e-mail' in combined or 'correo' in combined:
                 return 'email'
-            elif 'phone' in combined or 'mobile' in combined or 'telephone' in combined:
+            elif any(x in combined for x in ['phone', 'mobile', 'telephone',
+                                              'teléfono', 'celular', 'móvil']):
                 return 'phone'
-            elif any(x in combined for x in ['city', 'location', 'where']):
+            elif any(x in combined for x in ['city', 'location', 'where',
+                                              'ciudad', 'ubicación', 'lugar']):
                 return 'location'
             elif 'linkedin' in combined:
                 return 'linkedin_url'
-            elif any(x in combined for x in ['years', 'experience', 'how long']):
+            elif any(x in combined for x in ['years', 'experience', 'how long',
+                                              'años', 'experiencia', 'cuántos años']):
                 return 'years_experience'
-            elif 'company' in combined:
+            elif any(x in combined for x in ['company', 'empresa', 'compañía']):
                 return 'current_company'
-            elif 'website' in combined or 'portfolio' in combined:
+            elif 'website' in combined or 'portfolio' in combined or 'sitio web' in combined:
                 return 'website'
-            
+
             return 'unknown'
         except Exception:
             return 'unknown'
@@ -425,85 +431,226 @@ class LinkedInAutoApplyV3:
             return False
     
     def handle_easy_apply_form(self, page):
-        """Handle Easy Apply form filling"""
+        """Handle Easy Apply form filling — text inputs + dropdowns + radios"""
         try:
             print("[FORM] Analyzing form fields...")
-            
-            # Wait for form to load
             time.sleep(2)
-            
-            # Find all input fields
-            inputs = page.query_selector_all('input[type="text"], input[type="email"], input[type="tel"]')
-            
-            if not inputs:
-                print("[WARNING] No input fields found")
-                return False
-            
-            print(f"[FORM] Found {len(inputs)} input fields")
-            
-            # Fill each field
             filled_count = 0
+
+            # ── Text / email / tel inputs ─────────────────────────────────────
+            inputs = page.query_selector_all(
+                'input[type="text"], input[type="email"], input[type="tel"], '
+                'input[type="number"]'
+            )
+            print(f"[FORM] Found {len(inputs)} text inputs")
             for input_elem in inputs:
-                field_type = self.detect_field_type(input_elem)
-                
-                if field_type != 'unknown':
-                    if self.fill_form_field(input_elem, field_type):
-                        filled_count += 1
-            
-            print(f"[FORM] Filled {filled_count}/{len(inputs)} fields")
-            
-            # Handle dropdowns/selects
+                try:
+                    # Skip hidden or read-only inputs
+                    if not input_elem.is_visible():
+                        continue
+                    existing = (input_elem.input_value() or "").strip()
+                    if existing:
+                        print(f"    [SKIP] Already filled: {existing[:30]}")
+                        continue
+                    field_type = self.detect_field_type(input_elem)
+                    if field_type != 'unknown':
+                        if self.fill_form_field(input_elem, field_type):
+                            filled_count += 1
+                except Exception:
+                    continue
+
+            # ── Select / dropdown fields ──────────────────────────────────────
             selects = page.query_selector_all('select')
-            if selects:
-                print(f"[FORM] Found {len(selects)} dropdown menus (manual review needed)")
-            
-            # Handle radio buttons
-            radios = page.query_selector_all('input[type="radio"]')
-            if radios:
-                print(f"[FORM] Found {len(radios)} radio options (manual review needed)")
-            
-            return filled_count > 0
-            
+            print(f"[FORM] Found {len(selects)} dropdowns")
+            for sel_elem in selects:
+                try:
+                    if not sel_elem.is_visible():
+                        continue
+                    # Get current value and label text for context
+                    current = (sel_elem.input_value() or "").strip()
+                    if current and current not in ('', 'Select an option', 'Selecciona una opción'):
+                        print(f"    [SKIP] Dropdown already set: {current[:30]}")
+                        continue
+
+                    aria_label = (sel_elem.get_attribute('aria-label') or "").lower()
+                    label_text = ""
+                    try:
+                        lid = sel_elem.get_attribute('id') or ""
+                        if lid:
+                            lbl = page.query_selector(f'label[for="{lid}"]')
+                            if lbl:
+                                label_text = (lbl.text_content() or "").lower()
+                    except Exception:
+                        pass
+                    combined = f"{aria_label} {label_text}"
+
+                    # Determine what to select
+                    chosen = None
+                    if any(x in combined for x in ['years', 'experiencia', 'años', 'experience']):
+                        # Pick option closest to 10 years
+                        chosen = self._pick_dropdown_option(sel_elem, ['10', '8', '6', '5', '7', '9'])
+                    elif any(x in combined for x in ['country', 'país', 'pais']):
+                        chosen = self._pick_dropdown_option(sel_elem, ['Mexico', 'México', 'MX'])
+                    elif any(x in combined for x in ['authorize', 'autorizado', 'work auth',
+                                                      'visa', 'sponsorship', 'patrocinio']):
+                        chosen = self._pick_dropdown_option(sel_elem, ['Yes', 'Sí', 'Si', 'No'])
+                    elif any(x in combined for x in ['salary', 'salario', 'compensation']):
+                        # Skip salary dropdowns — don't risk filtering ourselves out
+                        print(f"    [SKIP] Salary dropdown — leaving blank")
+                        continue
+                    elif any(x in combined for x in ['education', 'educación', 'degree', 'título']):
+                        chosen = self._pick_dropdown_option(
+                            sel_elem, ["Bachelor's", 'Licenciatura', 'Master', 'Maestría']
+                        )
+
+                    if chosen:
+                        sel_elem.select_option(chosen)
+                        print(f"    [FILL] Dropdown → {chosen}")
+                        filled_count += 1
+                    else:
+                        # Last resort: select first non-empty option
+                        opts = sel_elem.query_selector_all('option')
+                        for opt in opts:
+                            val = opt.get_attribute('value') or ""
+                            txt = (opt.text_content() or "").strip()
+                            if val and txt and txt not in ('Select an option',
+                                                            'Selecciona una opción', '--'):
+                                sel_elem.select_option(val)
+                                print(f"    [FILL] Dropdown (first option) → {txt[:30]}")
+                                filled_count += 1
+                                break
+                except Exception as e:
+                    print(f"    [WARN] Dropdown error: {e}")
+                    continue
+
+            # ── Radio buttons ─────────────────────────────────────────────────
+            # LinkedIn uses fieldset+legend for Yes/No questions
+            fieldsets = page.query_selector_all('fieldset')
+            print(f"[FORM] Found {len(fieldsets)} fieldsets (radio groups)")
+            for fs in fieldsets:
+                try:
+                    legend = fs.query_selector('legend')
+                    legend_text = (legend.text_content() or "").lower() if legend else ""
+
+                    # Check if already answered
+                    checked = fs.query_selector('input[type="radio"]:checked')
+                    if checked:
+                        print(f"    [SKIP] Radio already selected in: {legend_text[:40]}")
+                        continue
+
+                    radios = fs.query_selector_all('input[type="radio"]')
+                    if not radios:
+                        continue
+
+                    # Work auth / visa questions → Yes
+                    if any(x in legend_text for x in ['autorizado', 'authorized', 'work',
+                                                        'visa', 'legal', 'patrocinio', 'sponsor']):
+                        target_label = 'Sí' if 'autorizado' in legend_text or 'sí' in legend_text else 'Yes'
+                        picked = self._pick_radio(fs, [target_label, 'Yes', 'Sí', 'Si'])
+                    else:
+                        # Default: pick first option
+                        picked = radios[0] if radios else None
+
+                    if picked:
+                        picked.click()
+                        time.sleep(0.3)
+                        print(f"    [FILL] Radio → {legend_text[:40]}")
+                        filled_count += 1
+                except Exception:
+                    continue
+
+            print(f"[FORM] Done — filled {filled_count} fields")
+            return True  # Always return True so the flow continues
+
         except Exception as e:
             print(f"[ERROR] Form handling failed: {e}")
             return False
+
+    def _pick_dropdown_option(self, sel_elem, preferences: list) -> str | None:
+        """Return the first preference value/text that exists as an option."""
+        try:
+            opts = sel_elem.query_selector_all('option')
+            opt_map = {}
+            for opt in opts:
+                val = opt.get_attribute('value') or ""
+                txt = (opt.text_content() or "").strip()
+                opt_map[txt] = val
+                opt_map[val] = val
+            for pref in preferences:
+                if pref in opt_map:
+                    return opt_map[pref]
+        except Exception:
+            pass
+        return None
+
+    def _pick_radio(self, fieldset, preferences: list):
+        """Return the first radio whose label matches a preference."""
+        try:
+            labels = fieldset.query_selector_all('label')
+            for pref in preferences:
+                for lbl in labels:
+                    txt = (lbl.text_content() or "").strip()
+                    if pref.lower() in txt.lower():
+                        lid = lbl.get_attribute('for') or ""
+                        if lid:
+                            radio = fieldset.query_selector(f'input[id="{lid}"]')
+                            if radio:
+                                return radio
+        except Exception:
+            pass
+        return None
     
     def check_for_next_step(self, page):
-        """Check if there's a Next/Continue button"""
+        """Check if there's a Next/Continue button (EN + ES LinkedIn MX)"""
         try:
-            # Common button texts
-            next_buttons = [
+            # Order matters: more-specific aria-label first, then text-match
+            next_selectors = [
+                'button[aria-label*="Continue to next step"]',
+                'button[aria-label*="Continuar al siguiente paso"]',
+                'button[aria-label*="Continue"]',
+                'button[aria-label*="Next"]',
                 'button:has-text("Next")',
                 'button:has-text("Continue")',
                 'button:has-text("Review")',
-                'button[aria-label*="Continue"]',
-                'button[aria-label*="Next"]'
+                # LinkedIn MX Spanish
+                'button:has-text("Siguiente")',
+                'button:has-text("Continuar")',
+                'button:has-text("Revisar")',
+                'button[aria-label*="Siguiente"]',
+                'button[aria-label*="Revisar"]',
             ]
-            
-            for selector in next_buttons:
-                button = page.query_selector(selector)
-                if button and button.is_visible():
-                    return button
-            
+            for selector in next_selectors:
+                try:
+                    button = page.query_selector(selector)
+                    if button and button.is_visible() and button.is_enabled():
+                        return button
+                except Exception:
+                    continue
             return None
         except Exception:
             return None
 
     def check_for_submit(self, page):
-        """Check if there's a Submit button"""
+        """Check if there's a Submit button (EN + ES LinkedIn MX)"""
         try:
-            submit_buttons = [
-                'button:has-text("Submit")',
+            submit_selectors = [
+                'button[aria-label*="Submit application"]',
+                'button[aria-label*="Enviar solicitud"]',
                 'button:has-text("Submit application")',
+                'button:has-text("Submit")',
+                # LinkedIn MX Spanish
+                'button:has-text("Enviar solicitud")',
+                'button:has-text("Enviar")',
                 'button[aria-label*="Submit"]',
-                'button[type="submit"]'
+                'button[aria-label*="Enviar"]',
             ]
-            
-            for selector in submit_buttons:
-                button = page.query_selector(selector)
-                if button and button.is_visible():
-                    return button
-            
+            for selector in submit_selectors:
+                try:
+                    button = page.query_selector(selector)
+                    if button and button.is_visible() and button.is_enabled():
+                        return button
+                except Exception:
+                    continue
             return None
         except Exception:
             return None
