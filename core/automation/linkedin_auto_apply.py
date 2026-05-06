@@ -533,11 +533,13 @@ class LinkedInAutoApplyV3:
             time.sleep(3)
             
             # Check if Easy Apply / LinkedIn Apply button exists
-            # LinkedIn renombró "Easy Apply" → "LinkedIn Apply" con clase jobs-apply-button
+            # Cubre EN ("Easy Apply") + ES ("Solicitud sencilla") + clase jobs-apply-button
             easy_apply_button = page.query_selector(
                 'button:has-text("Easy Apply"), '
+                'button:has-text("Solicitud sencilla"), '
                 'button[aria-label*="Easy Apply"], '
                 'button[aria-label*="easy apply"], '
+                'button[aria-label*="Solicitud sencilla"], '
                 'button.jobs-apply-button, '
                 '.jobs-apply-button--top-card'
             )

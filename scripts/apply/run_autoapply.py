@@ -245,11 +245,14 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
             time.sleep(3)
 
         # Check for Easy Apply / LinkedIn Apply button
-        # LinkedIn renamed "Easy Apply" → "LinkedIn Apply" (botón con clase jobs-apply-button)
+        # Cubre: EN ("Easy Apply"), ES ("Solicitud sencilla") y clase CSS jobs-apply-button
+        # LinkedIn renombró "Easy Apply" → "LinkedIn Apply" / "Solicitud sencilla" en MX
         easy_apply = page.query_selector(
             'button:has-text("Easy Apply"), '
+            'button:has-text("Solicitud sencilla"), '
             'button[aria-label*="Easy Apply"], '
             'button[aria-label*="easy apply"], '
+            'button[aria-label*="Solicitud sencilla"], '
             'button.jobs-apply-button, '
             '.jobs-apply-button--top-card'
         )
@@ -263,9 +266,11 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
                 ext_url = None
 
                 # First try: find href on the Apply link directly (some LinkedIn pages have it)
+                # Selectores EN + ES (mx.linkedin.com muestra UI en español)
                 for sel in (
                     'a[data-tracking-control-name*="apply"]',
                     'a:has-text("Apply"):not([aria-label*="Easy"])',
+                    'a:has-text("Solicitar"):not([aria-label*="Solicitud sencilla"])',
                     'a[href*="workable"], a[href*="greenhouse"], a[href*="lever.co"], '
                     'a[href*="smartrecruiters"], a[href*="bamboohr"], a[href*="ashby"]',
                 ):
@@ -282,9 +287,11 @@ def apply_to_job_with_submit(applier, job: dict, page, submit: bool = False,
 
                 # Second try: click Apply and capture the popup/new-tab URL
                 # LI-03: el botón "Apply" en LinkedIn puede ser <a> no <button>
+                # Agrega "Solicitar" para mx.linkedin.com (UI en español)
                 if not ext_url:
                     apply_btn = page.query_selector(
                         'button:has-text("Apply"):not(:has-text("Easy")), '
+                        'button:has-text("Solicitar"):not(:has-text("Solicitud")), '
                         'a.jobs-apply-button:not([aria-label*="Easy"]), '
                         'a[data-tracking-control-name*="apply"]:not([aria-label*="Easy"])'
                     )
