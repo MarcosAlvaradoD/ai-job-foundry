@@ -48,16 +48,27 @@ CV_PATH      = PROJECT_ROOT / "data" / "cv_descriptor.txt"
 LOG_PATH     = PROJECT_ROOT / "logs" / "copilot_sessions"
 
 # ─── LM Studio (detecta IP automaticamente) ──────────────────────────────────
-LM_STUDIO_HOSTS = [
+# Lee del .env si está disponible; si no, prueba la lista de hosts
+from dotenv import load_dotenv
+load_dotenv(PROJECT_ROOT / ".env")
+
+_env_url   = os.getenv("LM_STUDIO_URL", "").strip()
+_env_model = os.getenv("LM_STUDIO_MODEL", "").strip()
+
+# El host del .env va primero en la lista de candidatos
+LM_STUDIO_HOSTS = list(dict.fromkeys(filter(None, [
+    _env_url,
+    "http://127.0.0.1:11434",
+    "http://localhost:11434",
+    "http://127.0.0.1:1234",
     "http://192.168.100.39:11434",
     "http://192.168.100.28:11434",
     "http://172.17.32.1:11434",
-    "http://127.0.0.1:11434",
-    "http://localhost:11434",
     "http://192.168.100.39:1234",
-    "http://127.0.0.1:1234",
-]
-LM_STUDIO_MODEL = "qwen2.5-14b-instruct"
+])))
+
+# Modelo del .env; fallback al modelo anterior si no está configurado
+LM_STUDIO_MODEL = _env_model or "qwen2.5-14b-instruct"
 
 # ─── Intentar importar librerias de voz ──────────────────────────────────────
 try:

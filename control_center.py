@@ -538,7 +538,8 @@ def handle_option(option: str):
         print(f"   3. Escribe la pregunta del entrevistador → Enter")
         print(f"   4. LM Studio responde con sugerencia basada en tu CV")
         print(f"   5. Ctrl+Shift+H para ocultar/mostrar rápido")
-        print(f"\n{COLORS['CYAN']}Requiere: LM Studio corriendo con Qwen2.5 14B{COLORS['END']}")
+        lm_model = os.getenv("LM_STUDIO_MODEL", "Qwen2.5-14B")
+        print(f"\n{COLORS['CYAN']}Requiere: LM Studio corriendo — modelo activo: {lm_model}{COLORS['END']}")
         input(f"\n{COLORS['BOLD']}Presiona Enter para lanzar el overlay...{COLORS['END']}")
         return run_command(
             ['py', 'core/copilot/interview_copilot_overlay.py'],
