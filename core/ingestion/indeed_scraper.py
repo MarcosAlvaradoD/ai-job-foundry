@@ -174,6 +174,7 @@ class IndeedScraper:
                     'Source':      'Indeed MX',
                     'SearchQuery': query,
                     'QuerySource': query_source,
+                    'CreatedAt':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                     'DateFound':   datetime.now().strftime('%Y-%m-%d'),
                     'Status':      'New',
                     'RemoteScope': remote_scope,

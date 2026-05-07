@@ -319,6 +319,7 @@ class LinkedInSearchScraper:
                         url = url.split('?')[0]
 
                     job = {
+                        'CreatedAt':   datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'Role':        title.strip(),
                         'Company':     company.strip(),
                         'Location':    location.strip(),
